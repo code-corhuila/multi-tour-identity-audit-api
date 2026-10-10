@@ -52,7 +52,7 @@ class MongoOnboardingRoutesTest extends ShellTest {
   private static String pending(String identifier) {
     Map<String, Object> body = Map.of(
         "identifier", identifier, "commercialName", "Acme Tours", "timeZone", "America/Bogota", "country", "CO");
-    return as(service()).header("Idempotency-Key", "onboard:" + identifier).body(body).post(BASE)
+    return as(service()).header("Idempotency-Key", "onboard:" + identifier + System.nanoTime()).body(body).post(BASE)
         .jsonPath().getString("tenantId");
   }
 
