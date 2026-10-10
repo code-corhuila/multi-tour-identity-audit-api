@@ -99,8 +99,8 @@ class HttpShellTest {
   }
 
   @Test
-  void C_the_error_page_itself_answers_the_envelope() {
-    assertEnvelope(given().get("/error"), 500, "INTERNAL_ERROR");
+  void C_a_direct_request_to_the_error_page_is_a_404_and_not_a_server_error() {
+    assertEnvelope(given().get("/error"), 404, "NOT_FOUND");
   }
 
   @Test
