@@ -5,29 +5,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 
 import com.atlassian.oai.validator.restassured.OpenApiValidationFilter;
-import io.restassured.RestAssured;
 import io.restassured.response.Response;
 import io.restassured.specification.RequestSpecification;
 import java.nio.file.Path;
 import java.util.Set;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
-import org.springframework.boot.test.web.server.LocalServerPort;
 
-@SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT)
-class HttpShellTest {
+class HttpShellTest extends ShellTest {
 
   private static final OpenApiValidationFilter CONTRACT =
       new OpenApiValidationFilter(Path.of("..", "openapi", "openapi.yaml").toUri().toString());
-
-  @LocalServerPort int port;
-
-  @BeforeEach
-  void aim() {
-    RestAssured.port = port;
-  }
 
   /** The single envelope: only its four fields, a real message and the trace id the caller can quote. */
   private static void assertEnvelope(Response response, int status, String code) {
