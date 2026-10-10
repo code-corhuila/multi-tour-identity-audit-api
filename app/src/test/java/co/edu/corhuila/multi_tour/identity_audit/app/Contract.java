@@ -62,7 +62,7 @@ final class Contract {
       return path;
     }
     for (String candidate : paths) {
-      String regex = String.join("[^/]+", java.util.Arrays.stream(candidate.split("\{[^/}]+}", -1)).map(Pattern::quote).toList());
+      String regex = String.join("[^/]+", java.util.Arrays.stream(candidate.split("\\{[^/}]+}", -1)).map(Pattern::quote).toList());
       if (Pattern.matches(regex, path)) {
         return candidate;
       }
