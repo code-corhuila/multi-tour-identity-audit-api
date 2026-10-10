@@ -4,34 +4,22 @@ import static io.restassured.RestAssured.given;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
-import io.restassured.RestAssured;
 import java.time.Duration;
 import org.apache.coyote.http11.AbstractHttp11Protocol;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
-import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.boot.web.embedded.tomcat.TomcatWebServer;
 import org.springframework.boot.web.servlet.context.ServletWebServerApplicationContext;
 import org.springframework.core.env.Environment;
 
-@SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT)
 @ExtendWith(OutputCaptureExtension.class)
-class LogAndLimitsTest {
+class LogAndLimitsTest extends ShellTest {
 
-  @LocalServerPort int port;
   @Autowired Environment environment;
   @Autowired ServletWebServerApplicationContext context;
-
-  @BeforeEach
-  void aim() {
-    RestAssured.port = port;
-  }
 
   /** The line is written after the answer has left, so wait for it instead of reading too early. */
   private static void awaitLine(CapturedOutput output, String marker) {
