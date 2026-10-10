@@ -117,6 +117,9 @@ class MongoStatusRoutesTest extends ShellTest {
     assertRefused(refused(id + "/reactivate", Map.of("reason", "Again")), 422, "INVALID_STATUS_TRANSITION");
     assertRefused(refused(pending("pending-tours") + "/inactivate", Map.of("reason", "x")), 422, "INVALID_STATUS_TRANSITION");
     assertRefused(refused(pending("other-tours") + "/reactivate", Map.of("reason", "x")), 422, "INVALID_STATUS_TRANSITION");
+    String failed = pending("failed-tours");
+    service().body(Map.of("failedStep", "CREATE_ACCOUNT")).post(INTERNAL + "/" + failed + "/fail-onboarding");
+    assertRefused(refused(failed + "/inactivate", Map.of("reason", "x")), 422, "INVALID_STATUS_TRANSITION");
     assertThat(events("TenantInactivated")).isEqualTo(1);
     assertThat(events("TenantReactivated")).isEqualTo(1);
   }
@@ -128,7 +131,8 @@ class MongoStatusRoutesTest extends ShellTest {
     nulled.put("reason", null);
     for (String route : List.of("inactivate", "reactivate")) {
       for (Object bad : List.of(Map.of(), nulled, Map.of("reason", "  "), Map.of("reason", "r".repeat(501)),
-          Map.of("reason", 5), Map.of("reason", "ok", "extra", 1), "{not json", "", "null", "[]")) {
+          Map.of("reason", 5), Map.of("reason", "ok", "extra", 1), "{not json", "", "null", "[]",
+          "{\"reason\":\"a\nb\"}")) {
         assertRefused(refused(id + "/" + route, bad), 400, "VALIDATION_ERROR");
       }
       assertRefused(refused("not-a-uuid/" + route, Map.of("reason", "ok")), 400, "VALIDATION_ERROR");
@@ -161,8 +165,10 @@ class MongoStatusRoutesTest extends ShellTest {
   @Test
   void C_a_body_that_is_not_json_is_a_415() {
     String id = active("acme-tours");
-    Response response = admin().filter(Contract.answers()).contentType("text/plain").body("x")
-        .post(TENANTS + "/" + id + "/inactivate");
-    assertRefused(response, 415, "UNSUPPORTED_MEDIA_TYPE");
+    for (String route : List.of("inactivate", "reactivate")) {
+      Response response = admin().filter(Contract.answers()).contentType("text/plain").body("x")
+          .post(TENANTS + "/" + id + "/" + route);
+      assertRefused(response, 415, "UNSUPPORTED_MEDIA_TYPE");
+    }
   }
 }

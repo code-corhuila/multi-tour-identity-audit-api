@@ -403,6 +403,7 @@ components:
       properties:
         reason:
           type: string
+          description: Trimmed; no control character, new lines included; at most 500 UTF-16 units
           minLength: 1
           maxLength: 500
     TenantResponse:
