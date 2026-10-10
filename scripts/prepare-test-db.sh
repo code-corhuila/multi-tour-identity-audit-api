@@ -8,7 +8,9 @@
 #   sh scripts/prepare-test-db.sh down   removes the container
 #
 # The db repository is taken from DB_REPO (a sibling checkout, ../multi-tour-identity-audit-db by default) or,
-# when it is not there, cloned from DB_REPO_URL at DB_REPO_REF. Docker and git are the only requirements; the CI
+# when it is not there, cloned from DB_REPO_URL at DB_REPO_REF, a branch or a commit (the CI pins a commit, so the
+# result does not depend on when it runs; move it together with the change of this repository that needs it).
+# The commit that was used is always written to stderr. Docker and git are the only requirements; the CI
 # and a developer run this same file. Nothing is written to disk but the clone, and no secret is versioned: the
 # password of the application user is made on the spot and thrown away with the container.
 set -eu
@@ -51,18 +53,29 @@ case "${1:-}" in
     ;;
 esac
 
+clone=
+LIQUIBASE_IMAGE="$NAME-liquibase"
+cleanup() {
+  [ -z "$clone" ] || rm -rf "$clone"
+  docker rmi "$LIQUIBASE_IMAGE" >/dev/null 2>&1 || true
+}
+trap cleanup EXIT
+
 if [ ! -f "$DB_REPO/changelog/changelog-master.yaml" ]; then
-  log "cloning $DB_REPO_URL ($DB_REPO_REF)"
+  log "cloning $DB_REPO_URL at $DB_REPO_REF"
   clone=$(mktemp -d)
-  git clone --quiet --depth 1 --branch "$DB_REPO_REF" "$DB_REPO_URL" "$clone/db" >&2
+  git init --quiet "$clone/db" >&2
+  git -C "$clone/db" fetch --quiet --depth 1 "$DB_REPO_URL" "$DB_REPO_REF" >&2
+  git -C "$clone/db" checkout --quiet FETCH_HEAD >&2
   DB_REPO="$clone/db"
 fi
 DB_REPO=$(cd "$DB_REPO" && pwd)
+log "db repository: $DB_REPO at $(git -C "$DB_REPO" rev-parse --short HEAD 2>/dev/null || echo 'unknown commit')"
 
 docker rm -fv "$NAME" >/dev/null 2>&1 || true
 retry 3 20 docker pull -q "$MONGO_IMAGE" >/dev/null || { log "the MongoDB image could not be downloaded"; exit 1; }
 # The member is named localhost:PORT, as the host and the runner (which shares the network of the container) both see it
-docker run -d --name "$NAME" -p "127.0.0.1:$PORT:$PORT" "$MONGO_IMAGE" --replSet rs0 --bind_ip_all --port "$PORT" >/dev/null
+docker run -d --name "$NAME" -p "127.0.0.1:$PORT:$PORT" "$MONGO_IMAGE" --replSet rs0 --bind_ip_all --port "$PORT" >/dev/null   || { log "the container did not start: is the port $PORT in use? set TEST_DB_PORT to another"; docker rm -f "$NAME" >/dev/null 2>&1 || true; exit 1; }
 
 ready=0
 for _ in $(seq 1 60); do
@@ -82,7 +95,6 @@ done
 docker exec "$NAME" mongosh --quiet --port "$PORT" identity_audit \
   --eval "db.createUser({user: 'identity_audit_app', pwd: crypto.randomUUID(), roles: [{role: 'readWrite', db: 'identity_audit'}]})" >/dev/null
 
-LIQUIBASE_IMAGE="$NAME-liquibase"
 retry 3 20 docker build -q -f "$DB_REPO/deploy/liquibase.Dockerfile" --build-arg LIQUIBASE_BASE="$LIQUIBASE_BASE" \
   -t "$LIQUIBASE_IMAGE" "$DB_REPO/deploy" >/dev/null || { log "the runner image did not build"; exit 1; }
 docker run --rm --network "container:$NAME" -v "$DB_REPO:/workspace:ro" "$LIQUIBASE_IMAGE" \
@@ -91,6 +103,5 @@ docker run --rm --network "container:$NAME" -v "$DB_REPO:/workspace:ro" "$LIQUIB
   --database-changelog-table-name=databasechangelog_identity_audit \
   --database-changelog-lock-table-name=databasechangeloglock_identity_audit update >&2 \
   || { log "the migrations of the db repository did not apply"; exit 1; }
-docker rmi "$LIQUIBASE_IMAGE" >/dev/null 2>&1 || true
 
 echo "mongodb://localhost:$PORT/identity_audit?replicaSet=rs0"
