@@ -28,8 +28,9 @@ final class StatusChange {
   static String check(String tenantId, String actor, String reason, String correlationId) {
     Tenant.requireUuid(tenantId, "The tenant");
     Tenant.text(reason, 500, "The reason");
-    TenantEvent.requireWho(actor, correlationId);
-    return Tenant.text(actor, 100, "The actor");
+    String who = Tenant.text(actor, 100, "The actor");
+    TenantEvent.requireWho(who, correlationId);
+    return who;
   }
 
   Tenant run(String tenantId, String actor, String correlationId, BiFunction<Tenant, Instant, Tenant> change) {
