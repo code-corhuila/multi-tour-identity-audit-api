@@ -13,7 +13,7 @@
   <artifactId>identity-audit-adapters</artifactId>
 
   <properties>
-    <coverage.floor>0.40</coverage.floor>
+    <coverage.floor>0.42</coverage.floor>
   </properties>
 
   <dependencies>
