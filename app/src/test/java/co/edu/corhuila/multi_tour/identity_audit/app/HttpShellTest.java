@@ -4,17 +4,12 @@ import static io.restassured.RestAssured.given;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 
-import com.atlassian.oai.validator.restassured.OpenApiValidationFilter;
 import io.restassured.response.Response;
 import io.restassured.specification.RequestSpecification;
-import java.nio.file.Path;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 class HttpShellTest extends ShellTest {
-
-  private static final OpenApiValidationFilter CONTRACT =
-      new OpenApiValidationFilter(Path.of("..", "openapi", "openapi.yaml").toUri().toString());
 
   /** The single envelope: only its four fields, a real message and the trace id the caller can quote. */
   private static void assertEnvelope(Response response, int status, String code) {
@@ -30,7 +25,7 @@ class HttpShellTest extends ShellTest {
 
   @Test
   void C_health_answers_without_a_token_and_matches_the_contract() {
-    given().filter(CONTRACT).get("/health").then().statusCode(200).body("status", equalTo("ok"));
+    given().filter(Contract.filter()).get("/health").then().statusCode(200).body("status", equalTo("ok"));
   }
 
   @Test
