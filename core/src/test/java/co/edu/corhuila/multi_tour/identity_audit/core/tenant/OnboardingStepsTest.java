@@ -163,5 +163,12 @@ class OnboardingStepsTest {
         .isInstanceOf(IllegalArgumentException.class);
     assertThatThrownBy(() -> new TenantEvent(null, TenantEventType.TENANT_CREATED, pending, "who", "corr-1", NOW))
         .isInstanceOf(IllegalArgumentException.class);
+    // what the validator of the database would refuse is a validation error here, not a failure of the write
+    for (String[] bad : new String[][] {{"who", "has space"}, {"who", "tab" + (char) 9 + "x"}, {" who", "corr-1"},
+        {"who ", "corr-1"}, {"w" + (char) 10 + "o", "corr-1"}}) {
+      assertThatThrownBy(() -> new TenantEvent(ids.newId(), TenantEventType.TENANT_CREATED, pending, bad[0], bad[1], NOW))
+          .as("%s / %s", bad[0], bad[1])
+          .isInstanceOf(IllegalArgumentException.class);
+    }
   }
 }

@@ -12,6 +12,8 @@ import co.edu.corhuila.multi_tour.identity_audit.core.tenant.TenantEvent;
 import co.edu.corhuila.multi_tour.identity_audit.core.tenant.TenantEventType;
 import co.edu.corhuila.multi_tour.identity_audit.core.tenant.TenantStatus;
 import com.mongodb.ConnectionString;
+import com.mongodb.ErrorCategory;
+import com.mongodb.MongoBulkWriteException;
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoClients;
 import java.time.Instant;
@@ -127,6 +129,21 @@ class MongoTenantChangesTest {
   }
 
   @Test
+  void I_a_change_decided_on_a_state_that_came_back_to_the_same_status_is_still_refused() {
+    Tenant pending = stored(1, "acme-tours");
+    Tenant active = pending.completeOnboarding(MEMBERSHIP, TenantStatus.ACTIVE, LATER);
+    tenants.update(pending, active, List.of());
+    Tenant inactive = active.inactivate("a", "first", LATER.plusSeconds(1));
+    tenants.update(active, inactive, List.of());
+    Tenant back = inactive.reactivate("b", "second", LATER.plusSeconds(2));
+    tenants.update(inactive, back, List.of());
+    // the same status as when this decision was taken, but not the same tenant
+    Tenant stale = active.inactivate("c", "third", LATER.plusSeconds(3));
+    assertThatThrownBy(() -> tenants.update(active, stale, List.of())).isInstanceOf(ConcurrentChangeException.class);
+    assertThat(tenants.findById(pending.tenantId())).contains(back);
+  }
+
+  @Test
   void I_a_failed_write_of_the_event_leaves_the_tenant_as_it_was() {
     Tenant pending = stored(1, "acme-tours");
     Tenant done = pending.completeOnboarding(MEMBERSHIP, TenantStatus.ACTIVE, LATER);
@@ -136,7 +153,8 @@ class MongoTenantChangesTest {
             .append("aggregateId", pending.tenantId()).append("payload", new Document())
             .append("correlationId", "c").append("occurredAt", Date.from(LATER)).append("status", "PENDING")
             .append("attempts", 0).append("nextAttemptAt", Date.from(LATER)));
-    assertThatThrownBy(() -> tenants.update(pending, done, List.of(taken))).isInstanceOf(RuntimeException.class);
+    assertThatThrownBy(() -> tenants.update(pending, done, List.of(taken))).isInstanceOfSatisfying(MongoBulkWriteException.class,
+        e -> assertThat(e.getWriteErrors().get(0).getCategory()).isEqualTo(ErrorCategory.DUPLICATE_KEY));
     assertThat(tenants.findById(pending.tenantId())).contains(pending);
   }
 
