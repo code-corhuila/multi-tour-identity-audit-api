@@ -57,6 +57,12 @@ public record Tenant(
             == (firstAdministratorMembershipId != null),
         "Only a tenant that finished its onboarding has a first Administrator");
     require((status == TenantStatus.FAILED) == (failedStep != null), "Only a failed tenant has a failed step");
+    statusChangedBy = optionalText(statusChangedBy, 100, "Who made the change");
+    statusReason = optionalText(statusReason, 500, "The reason");
+    require((statusChangedBy == null) == (statusReason == null), "Who and why come together");
+    require(
+        (status != TenantStatus.PENDING && status != TenantStatus.FAILED) || statusChangedBy == null,
+        "A pending or failed tenant has no one who changed it");
     createdAt = moment(createdAt);
     updatedAt = moment(updatedAt);
     statusChangedAt = statusChangedAt == null ? null : moment(statusChangedAt);
@@ -73,15 +79,19 @@ public record Tenant(
     require(
         initialStatus == TenantStatus.ACTIVE || initialStatus == TenantStatus.INACTIVE,
         "The initial status is active or inactive");
-    require(firstAdministratorMembershipId != null, "The first Administrator is required");
+    require(
+        firstAdministratorMembershipId != null && UUID_FORMAT.matcher(firstAdministratorMembershipId).matches(),
+        "The first Administrator is a lowercase UUID");
+    Instant at = moment(now);
     allow(TenantStatus.PENDING, "complete its onboarding");
-    return next(initialStatus, firstAdministratorMembershipId, null, null, null, now);
+    return next(initialStatus, firstAdministratorMembershipId, null, null, null, at);
   }
 
   public Tenant failOnboarding(FailedStep step, Instant now) {
     require(step != null, "The failed step is required");
+    Instant at = moment(now);
     allow(TenantStatus.PENDING, "fail its onboarding");
-    return next(TenantStatus.FAILED, null, null, null, step, now);
+    return next(TenantStatus.FAILED, null, null, null, step, at);
   }
 
   public Tenant inactivate(String by, String reason, Instant now) {
@@ -97,8 +107,9 @@ public record Tenant(
       TenantStatus from, TenantStatus to, String action, String by, String reason, Instant now) {
     String who = text(by, 100, "Who makes the change");
     String why = text(reason, 500, "The reason");
+    Instant at = moment(now);
     allow(from, action);
-    return next(to, firstAdministratorMembershipId, who, why, null, now);
+    return next(to, firstAdministratorMembershipId, who, why, null, at);
   }
 
   private Tenant next(
@@ -106,6 +117,12 @@ public record Tenant(
     return new Tenant(
         tenantId, identifier, commercialName, timeZone, country, createdAt, to, administrator, now, by, reason,
         step, now);
+  }
+
+  /** Only what identifies the tenant: the free text of a reason or a name does not reach a log. */
+  @Override
+  public String toString() {
+    return "Tenant[" + tenantId + ", " + identifier + ", " + status + "]";
   }
 
   private void allow(TenantStatus required, String action) {
@@ -124,6 +141,10 @@ public record Tenant(
   private static Instant moment(Instant time) {
     require(time != null, "The time is required");
     return time.truncatedTo(ChronoUnit.MILLIS);
+  }
+
+  private static String optionalText(String value, int max, String what) {
+    return value == null ? null : text(value, max, what);
   }
 
   /** A text that is not blank, has no control character and is not longer than the limit; it is trimmed. */
