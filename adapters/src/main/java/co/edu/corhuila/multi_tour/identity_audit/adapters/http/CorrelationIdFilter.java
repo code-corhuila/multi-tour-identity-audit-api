@@ -7,6 +7,8 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.UUID;
 import java.util.regex.Pattern;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
@@ -24,6 +26,8 @@ public class CorrelationIdFilter extends OncePerRequestFilter {
 
   public static final String HEADER = "X-Correlation-Id";
   private static final String MDC_KEY = "traceId";
+  private static final Logger LOG = LoggerFactory.getLogger(CorrelationIdFilter.class);
+  private static final int LOGGED_PATH = 200;
   private static final Pattern SAFE = Pattern.compile("[A-Za-z0-9._-]{1,128}");
 
   /** The trace id of the request being served; the filter always runs first, so "unknown" is a bug to see. */
@@ -40,10 +44,19 @@ public class CorrelationIdFilter extends OncePerRequestFilter {
     String id = sent != null && SAFE.matcher(sent).matches() ? sent : UUID.randomUUID().toString();
     MDC.put(MDC_KEY, id);
     response.setHeader(HEADER, id);
+    boolean completed = false;
     try {
       chain.doFilter(request, response);
+      completed = true;
     } finally {
+      // an exception that leaves the chain is answered 500 by the container after this line
+      int status = completed ? response.getStatus() : 500;
+      LOG.info("{} {} answered {}", request.getMethod(), cut(request.getRequestURI()), status);
       MDC.remove(MDC_KEY);
     }
+  }
+
+  private static String cut(String path) {
+    return path.length() > LOGGED_PATH ? path.substring(0, LOGGED_PATH) + "..." : path;
   }
 }
