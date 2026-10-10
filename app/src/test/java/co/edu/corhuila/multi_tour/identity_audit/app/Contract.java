@@ -1,5 +1,8 @@
 package co.edu.corhuila.multi_tour.identity_audit.app;
 
+import com.atlassian.oai.validator.OpenApiInteractionValidator;
+import com.atlassian.oai.validator.report.LevelResolver;
+import com.atlassian.oai.validator.report.ValidationReport;
 import com.atlassian.oai.validator.restassured.OpenApiValidationFilter;
 import io.restassured.filter.Filter;
 import io.restassured.filter.FilterContext;
@@ -21,16 +24,36 @@ import java.util.regex.Pattern;
 final class Contract {
 
   private static final String SPEC = Path.of("..", "openapi", "openapi.yaml").toUri().toString();
-  private static final OpenApiValidationFilter VALIDATION = new OpenApiValidationFilter(SPEC);
+  /** The request and the answer, but not the token: the 401 tests send none on purpose. */
+  private static final OpenApiValidationFilter FULL = new OpenApiValidationFilter(
+      OpenApiInteractionValidator.createFor(SPEC)
+          .withLevelResolver(LevelResolver.create()
+              .withLevel("validation.request.security.missing", ValidationReport.Level.IGNORE).build())
+          .build());
+  /** Only the answer: a test of a refusal sends a request that breaks the contract, on purpose. */
+  private static final OpenApiValidationFilter ANSWERS = new OpenApiValidationFilter(
+      OpenApiInteractionValidator.createFor(SPEC)
+          .withLevelResolver(LevelResolver.create()
+              .withLevel("validation.request", ValidationReport.Level.IGNORE).build())
+          .build());
   private static final Set<String> OPERATIONS = read();
   private static final ExercisedOperations EXERCISED = new ExercisedOperations();
 
   private Contract() {}
 
-  /** Validates the answer against the contract and remembers which operation was asked and how it was answered. */
+  /** Validates the request and the answer against the contract and remembers the operation and its status. */
   static Filter filter() {
+    return recording(FULL);
+  }
+
+  /** Validates only the answer against the contract, for the requests that break it on purpose. */
+  static Filter answers() {
+    return recording(ANSWERS);
+  }
+
+  private static Filter recording(OpenApiValidationFilter validation) {
     return (FilterableRequestSpecification request, FilterableResponseSpecification response, FilterContext context) -> {
-      Response answer = VALIDATION.filter(request, response, context);
+      Response answer = validation.filter(request, response, context);
       EXERCISED.record(request.getMethod(), template(request.getDerivedPath()), answer.statusCode());
       return answer;
     };

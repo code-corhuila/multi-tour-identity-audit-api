@@ -1,11 +1,14 @@
 openapi: 3.0.3
 info:
   title: Identity Audit API
-  version: 0.1.0
+  version: 0.2.0
   description: |
-    The contract this service is tested against (ADR-004 D7). It grows with each operation, written
-    before the code; the design contract lives in `07-api/contracts/openapi/identity-audit.yaml` of
-    `multi-tour-docs`. Every error uses the single envelope below.
+    The contract this service is tested against (ADR-004 D7). It grows with each operation, written before the
+    code; the design contract lives in `07-api/contracts/openapi/identity-audit.yaml` of `multi-tour-docs`.
+    The paths are the real ones, with the prefix `/api/v1/identity-audit` that the gateway routes to this
+    service (guidelines: `/api/v1/<domain>/internal/...`). Every error uses the single envelope below.
+    The routes under `/internal/` answer only a token with the role `SERVICE`; the others of this file are
+    added with their story.
 paths:
   /health:
     get:
@@ -23,7 +26,98 @@ paths:
                   status:
                     type: string
                     enum: [ok]
+  /api/v1/identity-audit/internal/tenants:
+    post:
+      summary: Step 1 of onboard-tenant, create the tenant as pending
+      description: |
+        Creates the tenant pending, with its unique identifier. The `Idempotency-Key` is `<saga>:<step>`; a
+        repeat answers `200` with the tenant already created, whatever the body says now.
+        **Requires:** `SERVICE` role.
+      operationId: registerPendingTenant
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterTenantRequest'
+      responses:
+        '201':
+          description: Tenant created as pending
+          headers:
+            Location:
+              description: Path of the created tenant
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantResponse'
+        '200':
+          description: Repeated request with the same `Idempotency-Key`; the tenant already created, as it is now
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          description: The identifier is used by a live tenant; the message names it
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/InternalError'
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: Same value on every retry of the same creation. 8 to 128 characters, no white space.
+      schema:
+        type: string
+        minLength: 8
+        maxLength: 128
+        pattern: '^\S+$'
+  responses:
+    ValidationError:
+      description: A missing or invalid field, or a missing or invalid `Idempotency-Key`
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Unauthorized:
+      description: The token is missing or not valid
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Forbidden:
+      description: The token is valid but its role does not allow this
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    InternalError:
+      description: Internal error; the detail is in the log under the `traceId`
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
   schemas:
     ErrorResponse:
       type: object
@@ -44,3 +138,61 @@ components:
                 type: string
         traceId:
           type: string
+    RegisterTenantRequest:
+      type: object
+      description: Step 1 of `onboard-tenant`. The administrator's data and password never reach this service.
+      required: [identifier, commercialName, timeZone, country]
+      additionalProperties: false
+      properties:
+        identifier:
+          type: string
+          minLength: 3
+          maxLength: 40
+          pattern: '^[a-z0-9]+(-[a-z0-9]+)*$'
+        commercialName:
+          type: string
+          minLength: 1
+          maxLength: 120
+        timeZone:
+          type: string
+          maxLength: 64
+        country:
+          type: string
+          pattern: '^[A-Z]{2}$'
+    TenantResponse:
+      type: object
+      required: [tenantId, identifier, commercialName, tenantStatus, timeZone, country, createdAt]
+      properties:
+        tenantId:
+          type: string
+          format: uuid
+        identifier:
+          type: string
+        commercialName:
+          type: string
+        tenantStatus:
+          type: string
+          enum: [PENDING, ACTIVE, INACTIVE, FAILED]
+        timeZone:
+          type: string
+        country:
+          type: string
+        firstAdministratorMembershipId:
+          type: string
+          format: uuid
+        statusChangedAt:
+          type: string
+          format: date-time
+        statusChangedBy:
+          type: string
+        statusReason:
+          type: string
+        failedStep:
+          type: string
+          enum: [CREATE_ACCOUNT, APPLY_STATUS]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
