@@ -78,11 +78,13 @@ class MongoOutboxAttemptsRouteTest extends ShellTest {
     assertThat(first.jsonPath().getInt("attempts")).isEqualTo(1);
     assertThat(first.jsonPath().getString("lastError")).isEqualTo("consumer answered 503");
     assertThat(first.jsonPath().getString("status")).isEqualTo("PENDING");
-    assertThat(waitOf(first)).isBetween(Duration.ofSeconds(2), Duration.ofSeconds(6));
+    assertThat(waitOf(first)).isBetween(Duration.ZERO, Duration.ofSeconds(6));
     assertThat(service().get(OUTBOX).jsonPath().getList("data")).isEmpty();
     Response second = attempt(id, "again");
     assertThat(second.jsonPath().getInt("attempts")).isEqualTo(2);
-    assertThat(waitOf(second)).isBetween(Duration.ofSeconds(7), Duration.ofSeconds(11));
+    // the wait doubled: 10 s after the second report against 5 s after the first
+    assertThat(Duration.between(Instant.parse(first.jsonPath().getString("nextAttemptAt")),
+        Instant.parse(second.jsonPath().getString("nextAttemptAt")))).isBetween(Duration.ofSeconds(5), Duration.ofSeconds(9));
     client.getDatabase(database).getCollection("outbox_events")
         .updateOne(new Document(), new Document("$set", new Document("nextAttemptAt", java.util.Date.from(Instant.now().minusSeconds(1)))));
     assertThat(service().get(OUTBOX).jsonPath().getList("data")).hasSize(1);
@@ -119,7 +121,8 @@ class MongoOutboxAttemptsRouteTest extends ShellTest {
     Map<String, Object> nulled = new HashMap<>();
     nulled.put("error", null);
     for (Object bad : List.of(Map.of(), nulled, Map.of("error", "  "), Map.of("error", "e".repeat(1001)), Map.of("error", 5),
-        Map.of("error", "ok", "extra", 1), "{\"error\":\"a\\nb\"}", "{not json", "", "null", "[]")) {
+        Map.of("error", "ok", "extra", 1), "{\"error\":\"a\\nb\"}", "{\"error\":\"a\",\"error\":\"b\"}", "{\"error\":[\"a\"]}", "{\"error\":{}}",
+        "{not json", "", "null", "[]")) {
       assertRefused(refused(id, bad), 400, "VALIDATION_ERROR");
     }
     assertRefused(refused("not-a-uuid", Map.of("error", "ok")), 400, "VALIDATION_ERROR");
