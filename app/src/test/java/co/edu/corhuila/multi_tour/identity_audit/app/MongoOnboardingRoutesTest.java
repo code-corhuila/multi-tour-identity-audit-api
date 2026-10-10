@@ -223,4 +223,24 @@ class MongoOnboardingRoutesTest extends ShellTest {
       assertRefused(response, 415, "UNSUPPORTED_MEDIA_TYPE");
     }
   }
+
+  @Test
+  void C_the_event_written_names_the_service_as_actor_and_carries_the_correlation_id_sent() {
+    String id = pending();
+    as(service()).filter(Contract.filter()).header("X-Correlation-Id", "abc-123").body(completion())
+        .post(BASE + "/" + id + "/complete-onboarding").then().statusCode(200);
+    Document event = client.getDatabase(database).getCollection("outbox_events").find().first();
+    assertThat(event.getString("eventType")).isEqualTo("TenantCreated");
+    assertThat(event.getString("actorId")).isEqualTo("onboard-tenant");
+    assertThat(event.getString("correlationId")).isEqualTo("abc-123");
+  }
+
+  @Test
+  void C_an_empty_body_a_null_an_array_or_a_text_is_a_400_on_both_routes() {
+    String id = pending();
+    for (String bad : List.of("", "null", "[]", "ACTIVE")) {
+      assertRefused(completeRefused(id, bad), 400, "VALIDATION_ERROR");
+      assertRefused(failRefused(id, bad), 400, "VALIDATION_ERROR");
+    }
+  }
 }
