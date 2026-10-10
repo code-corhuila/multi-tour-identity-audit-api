@@ -131,6 +131,11 @@ public record Tenant(
     }
   }
 
+  /** A lowercase UUID, as the first Administrator and the tenant are identified. */
+  static void requireUuid(String value, String what) {
+    require(value != null && UUID_FORMAT.matcher(value).matches(), what + " is a lowercase UUID");
+  }
+
   private static void require(boolean condition, String message) {
     if (!condition) {
       throw new IllegalArgumentException(message);
