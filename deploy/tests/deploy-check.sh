@@ -17,6 +17,8 @@ JRE_IMAGE="${JRE_IMAGE:-eclipse-temurin:21.0.8_9-jre}"
 RUN_ID="idaapi-deploy-$$"
 fail=0
 
+# the driver connects when it is first used, so an address that nobody listens on is enough to start
+DB_URI="mongodb://localhost:27017/identity_audit"
 KEYFILE=
 cleanup() {
   docker rm -f "$RUN_ID" >/dev/null 2>&1 || true
@@ -57,7 +59,7 @@ make_key() {
 starts_and_answers() {
   make_key || { echo "could not make a key"; return 1; }
   # the flags of the compose file, so what it declares is what is tried
-  docker run -d --name "$RUN_ID" --read-only --tmpfs /tmp --cap-drop ALL --security-opt no-new-privileges -p 127.0.0.1::8082 -e PORT=8082 -e JWT_PUBLIC_KEY="$(cat "$KEYFILE")" "$RUN_ID" >/dev/null || return 1
+  docker run -d --name "$RUN_ID" --read-only --tmpfs /tmp --cap-drop ALL --security-opt no-new-privileges -p 127.0.0.1::8082 -e PORT=8082 -e MONGODB_URI="$DB_URI" -e JWT_PUBLIC_KEY="$(cat "$KEYFILE")" "$RUN_ID" >/dev/null || return 1
   port=$(docker port "$RUN_ID" 8082/tcp | head -n 1 | sed 's/.*://')
   health=000
   for _ in $(seq 1 40); do
@@ -74,12 +76,20 @@ check "I·api_image_builds" build_image
 check "I·api_compose_publishes_no_port_and_defines_no_database" compose_has_no_published_port_database_or_volume
 # The README promises that the service stops at start, saying why, when it has no public key
 stops_without_a_key() {
-  out=$(docker run --rm -e PORT=8082 "$RUN_ID" 2>&1) && { echo "the service started without a public key"; return 1; }
+  out=$(docker run --rm -e PORT=8082 -e MONGODB_URI="$DB_URI" "$RUN_ID" 2>&1) && { echo "the service started without a public key"; return 1; }
   printf '%s' "$out" | grep -q 'JWT_PUBLIC_KEY' || { echo "the message does not name JWT_PUBLIC_KEY"; return 1; }
 }
 
 check "I·api_image_starts_answers_health_and_protects_the_api" starts_and_answers
+# ... and without the address of the database
+stops_without_the_database() {
+  make_key || return 1
+  out=$(docker run --rm -e PORT=8082 -e JWT_PUBLIC_KEY="$(cat "$KEYFILE")" "$RUN_ID" 2>&1) && { echo "the service started without a database address"; return 1; }
+  printf '%s' "$out" | grep -q 'MONGODB_URI' || { echo "the message does not name MONGODB_URI"; return 1; }
+}
+
 check "I·api_image_stops_without_a_public_key_and_says_why" stops_without_a_key
+check "I·api_image_stops_without_a_database_address_and_says_why" stops_without_the_database
 
 [ "$fail" = 0 ] && echo "ALL CHECKS PASSED" || echo "SOME CHECKS FAILED"
 exit "$fail"
