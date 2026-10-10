@@ -84,7 +84,7 @@ class RegisterPendingTenantTest {
   @Test
   void A_register_that_loses_the_race_for_the_identifier_is_refused_and_stores_nothing() {
     var other = new RegisterPendingTenant(tenants, ids, Clock.fixed(NOW, ZoneOffset.UTC));
-    tenants.beforeNextInsert = () -> other.execute(command("acme-tours", "key-0000009"));
+    tenants.beforeNextWrite = () -> other.execute(command("acme-tours", "key-0000009"));
     assertThatThrownBy(() -> register.execute(command("acme-tours", "key-0000001")))
         .isInstanceOf(IdentifierTakenException.class);
     assertThat(tenants.tenants).hasSize(1);
@@ -94,7 +94,7 @@ class RegisterPendingTenantTest {
   @Test
   void A_register_that_loses_the_race_for_its_own_key_answers_the_winner_even_if_the_identifier_also_conflicts() {
     var other = new RegisterPendingTenant(tenants, ids, Clock.fixed(NOW, ZoneOffset.UTC));
-    tenants.beforeNextInsert = () -> other.execute(command("acme-tours", "key-0000001"));
+    tenants.beforeNextWrite = () -> other.execute(command("acme-tours", "key-0000001"));
     var loser = register.execute(command("acme-tours", "key-0000001"));
     assertThat(loser.created()).isFalse();
     assertThat(loser.tenant()).isEqualTo(tenants.findByRepeatKey(key("key-0000001")).orElseThrow());
@@ -105,7 +105,7 @@ class RegisterPendingTenantTest {
   void A_register_whose_first_send_won_is_answered_with_it_whichever_conflict_the_repository_finds_first() {
     var other = new RegisterPendingTenant(tenants, ids, Clock.fixed(NOW, ZoneOffset.UTC));
     tenants.identifierConflictFirst = true;
-    tenants.beforeNextInsert = () -> other.execute(command("acme-tours", "key-0000001"));
+    tenants.beforeNextWrite = () -> other.execute(command("acme-tours", "key-0000001"));
     var loser = register.execute(command("acme-tours", "key-0000001"));
     assertThat(loser.created()).isFalse();
     assertThat(tenants.tenants).hasSize(1);
