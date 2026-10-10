@@ -94,6 +94,10 @@ class MongoTenantReadRoutesTest extends ShellTest {
     Response active = admin().filter(Contract.filter()).queryParam("status", "ACTIVE").get(TENANTS);
     assertThat(active.jsonPath().getList("data.identifier")).containsExactly("active-tours");
     assertThat(active.jsonPath().getInt("meta.total")).isEqualTo(1);
+    for (String status : List.of("PENDING", "FAILED")) {
+      Response one = admin().filter(Contract.filter()).queryParam("status", status).get(TENANTS);
+      assertThat(one.jsonPath().getList("data.tenantStatus")).containsExactly(status);
+    }
     Response past = admin().filter(Contract.filter()).queryParam("page", 9).get(TENANTS);
     assertThat(past.jsonPath().getList("data")).isEmpty();
     assertThat(past.jsonPath().getInt("meta.total")).isEqualTo(3);
@@ -105,10 +109,14 @@ class MongoTenantReadRoutesTest extends ShellTest {
     for (Map<String, Object> bad : List.of(
         Map.<String, Object>of("limit", 0), Map.<String, Object>of("limit", 101), Map.<String, Object>of("page", 0),
         Map.<String, Object>of("page", "abc"), Map.<String, Object>of("limit", ""), Map.<String, Object>of("status", "BAD"),
-        Map.<String, Object>of("status", "active"), Map.<String, Object>of("name", "x"))) {
+        Map.<String, Object>of("status", "active"), Map.<String, Object>of("name", "x"),
+        Map.<String, Object>of("page", "+1"), Map.<String, Object>of("limit", " 5"), Map.<String, Object>of("page", "99999999999"),
+        Map.<String, Object>of("limit", "٥"), Map.<String, Object>of("status", ""))) {
       assertRefused(admin().filter(Contract.answers()).queryParams(bad).get(TENANTS), 400, "VALIDATION_ERROR");
     }
     assertRefused(admin().filter(Contract.answers()).get(TENANTS + "?page=1&page=2"), 400, "VALIDATION_ERROR");
+    assertRefused(admin().filter(Contract.answers()).get(TENANTS + "?status=ACTIVE&status=FAILED"), 400, "VALIDATION_ERROR");
+    assertThat(admin().filter(Contract.filter()).queryParam("limit", 100).get(TENANTS).statusCode()).isEqualTo(200);
   }
 
   @Test
