@@ -14,8 +14,8 @@ public final class RecordFailedAttempt {
         throw new InvalidDataException("The error is required");
       }
       error = error.strip();
-      if (error.length() > 1000 || error.chars().anyMatch(Character::isISOControl)) {
-        throw new InvalidDataException("The error is at most 1000 characters with no control character");
+      if (error.length() > 1000 || error.codePoints().anyMatch(RecordFailedAttempt::disguises)) {
+        throw new InvalidDataException("The error is at most 1000 characters with no control, format or separator character");
       }
     }
   }
@@ -32,5 +32,14 @@ public final class RecordFailedAttempt {
 
   public OutboxEvent execute(Command command) {
     return change.run(command.eventId(), event -> event.withFailedAttempt(command.error(), clock.instant(), policy));
+  }
+
+  /** What can disguise a line of a log or a screen: control, format (bidi, zero-width, tags) and separators, a lone surrogate, an unassigned or private-use point; the plain space is fine. */
+  private static boolean disguises(int codePoint) {
+    return codePoint != ' ' && switch (Character.getType(codePoint)) {
+      case Character.CONTROL, Character.FORMAT, Character.LINE_SEPARATOR, Character.PARAGRAPH_SEPARATOR,
+          Character.SPACE_SEPARATOR, Character.SURROGATE, Character.UNASSIGNED, Character.PRIVATE_USE -> true;
+      default -> false;
+    };
   }
 }
