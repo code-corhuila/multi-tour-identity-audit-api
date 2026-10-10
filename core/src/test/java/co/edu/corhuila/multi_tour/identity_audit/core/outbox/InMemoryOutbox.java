@@ -15,6 +15,7 @@ final class InMemoryOutbox implements OutboxRepository {
   final Map<String, OutboxEvent> events = new HashMap<>();
   /** Runs just before the next update: another request that arrives first, with real state. */
   Runnable beforeNextWrite;
+  int writes;
 
   @Override
   public Page<OutboxEvent> due(Instant now, int page, int limit) {
@@ -41,6 +42,7 @@ final class InMemoryOutbox implements OutboxRepository {
     if (!expected.equals(events.get(expected.eventId()))) {
       throw new ConcurrentChangeException(expected.eventId());
     }
+    writes++;
     events.put(next.eventId(), next);
   }
 }

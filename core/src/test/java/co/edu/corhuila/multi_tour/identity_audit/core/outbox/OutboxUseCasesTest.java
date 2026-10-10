@@ -21,7 +21,6 @@ class OutboxUseCasesTest {
   private final InMemoryOutbox outbox = new InMemoryOutbox();
   private final Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
   private final RetryPolicy policy = new RetryPolicy(Duration.ofSeconds(5), Duration.ofMinutes(15), 20);
-  private final ListDueEvents list = new ListDueEvents(outbox, clock);
   private final MarkEventPublished publish = new MarkEventPublished(outbox, clock);
   private final RecordFailedAttempt attempt = new RecordFailedAttempt(outbox, clock, policy);
 
@@ -38,28 +37,6 @@ class OutboxUseCasesTest {
   }
 
   @Test
-  void A_the_listing_has_only_the_pending_events_that_are_due_oldest_first_by_page() {
-    stored(event("00000000-0000-4000-8000-000000000003", 1, NOW));
-    stored(event("00000000-0000-4000-8000-000000000002", 5, NOW.minusSeconds(1)));
-    stored(event(ID, 9, NOW));
-    stored(event("00000000-0000-4000-8000-000000000004", 7, NOW.plusSeconds(1)));
-    stored(event("00000000-0000-4000-8000-000000000005", 8, NOW).published(NOW));
-    var first = list.execute(new ListDueEvents.Query(1, 2));
-    assertThat(first.data()).extracting(OutboxEvent::eventId).containsExactly(ID, "00000000-0000-4000-8000-000000000002");
-    assertThat(first.total()).isEqualTo(3);
-    assertThat(list.execute(new ListDueEvents.Query(2, 2)).data()).hasSize(1);
-    assertThat(list.execute(new ListDueEvents.Query(9, 2)).data()).isEmpty();
-  }
-
-  @Test
-  void A_a_page_below_1_and_a_limit_out_of_1_to_100_are_refused_not_trimmed() {
-    for (int[] bad : new int[][] {{0, 20}, {1, 0}, {1, 101}, {-1, 5}}) {
-      assertThatThrownBy(() -> new ListDueEvents.Query(bad[0], bad[1])).isInstanceOf(InvalidDataException.class);
-    }
-    assertThat(new ListDueEvents.Query(1, 100).limit()).isEqualTo(100);
-  }
-
-  @Test
   void A_marking_published_keeps_the_time_once_and_a_repeat_changes_nothing() {
     stored(event(ID, 1, NOW));
     var done = publish.execute(ID);
@@ -67,6 +44,7 @@ class OutboxUseCasesTest {
     assertThat(done.publishedAt()).isEqualTo(NOW);
     var later = new MarkEventPublished(outbox, Clock.fixed(NOW.plusSeconds(60), ZoneOffset.UTC));
     assertThat(later.execute(ID)).isEqualTo(done);
+    assertThat(outbox.writes).isEqualTo(1);
   }
 
   @Test
@@ -101,6 +79,7 @@ class OutboxUseCasesTest {
     assertThat(policy.waitAfter(9)).isEqualTo(Duration.ofMinutes(15));
     assertThat(policy.waitAfter(19)).isEqualTo(Duration.ofMinutes(15));
     assertThat(policy.waitAfter(500)).isEqualTo(Duration.ofMinutes(15));
+    assertThat(policy.waitAfter(0)).isEqualTo(Duration.ofSeconds(5));
   }
 
   @Test
@@ -112,8 +91,9 @@ class OutboxUseCasesTest {
     }
     assertThat(last.status()).isEqualTo(OutboxEvent.Status.FAILED);
     assertThat(last.attempts()).isEqualTo(20);
-    assertThat(list.execute(new ListDueEvents.Query(1, 20)).data()).isEmpty();
+    assertThat(outbox.due(NOW.plusSeconds(3600), 1, 20).data()).isEmpty();
     assertThat(attempt.execute(new RecordFailedAttempt.Command(ID, "late"))).isEqualTo(last);
+    assertThat(outbox.writes).isEqualTo(20);
   }
 
   @Test
@@ -121,6 +101,7 @@ class OutboxUseCasesTest {
     stored(event(ID, 1, NOW));
     var done = publish.execute(ID);
     assertThat(attempt.execute(new RecordFailedAttempt.Command(ID, "late"))).isEqualTo(done);
+    assertThat(outbox.writes).isEqualTo(1);
   }
 
   @Test
