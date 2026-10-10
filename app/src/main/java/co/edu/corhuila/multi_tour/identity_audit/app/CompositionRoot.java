@@ -5,6 +5,8 @@ import co.edu.corhuila.multi_tour.identity_audit.adapters.persistence.MongoTenan
 import co.edu.corhuila.multi_tour.identity_audit.core.outbox.ListDueEvents;
 import co.edu.corhuila.multi_tour.identity_audit.core.outbox.MarkEventPublished;
 import co.edu.corhuila.multi_tour.identity_audit.core.outbox.OutboxRepository;
+import co.edu.corhuila.multi_tour.identity_audit.core.outbox.RecordFailedAttempt;
+import co.edu.corhuila.multi_tour.identity_audit.core.outbox.RetryPolicy;
 import co.edu.corhuila.multi_tour.identity_audit.core.tenant.CompleteOnboarding;
 import co.edu.corhuila.multi_tour.identity_audit.core.tenant.ConsultTenant;
 import co.edu.corhuila.multi_tour.identity_audit.core.tenant.FailOnboarding;
@@ -20,6 +22,7 @@ import com.mongodb.MongoClientSettings;
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoClients;
 import java.time.Clock;
+import java.time.Duration;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import org.springframework.beans.factory.annotation.Value;
@@ -138,5 +141,23 @@ class CompositionRoot {
   @Bean
   MarkEventPublished markEventPublished(OutboxRepository outbox, Clock clock) {
     return new MarkEventPublished(outbox, clock);
+  }
+
+  /** The wait between attempts and the number of them (ADR-004 D10), from the configuration. */
+  @Bean
+  RetryPolicy outboxRetryPolicy(
+      @Value("${outbox.retry.base:PT5S}") Duration base, @Value("${outbox.retry.cap:PT15M}") Duration cap,
+      @Value("${outbox.retry.max-attempts:20}") int maxAttempts) {
+    // a bare number in the configuration is read as milliseconds, so a typo must not turn into a hammer
+    if (base.compareTo(Duration.ofSeconds(1)) < 0 || cap.compareTo(Duration.ofHours(24)) > 0 || maxAttempts > 1000) {
+      throw new IllegalStateException(
+          "outbox.retry.base must be at least 1 s, outbox.retry.cap at most 24 h and outbox.retry.max-attempts at most 1000");
+    }
+    return new RetryPolicy(base, cap, maxAttempts);
+  }
+
+  @Bean
+  RecordFailedAttempt recordFailedAttempt(OutboxRepository outbox, Clock clock, RetryPolicy policy) {
+    return new RecordFailedAttempt(outbox, clock, policy);
   }
 }

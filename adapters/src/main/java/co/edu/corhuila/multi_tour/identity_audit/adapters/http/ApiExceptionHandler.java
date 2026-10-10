@@ -79,7 +79,7 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
   ResponseEntity<Object> concurrentChange(ConcurrentChangeException e) {
     LOG.warn("A change raced with another: {}", e.getMessage());
     return answer(HttpStatus.UNPROCESSABLE_ENTITY, "BUSINESS_RULE_VIOLATION",
-        "The tenant changed while the request was being decided; try again", null);
+        "The data changed while the request was being decided; try again", null);
   }
 
   private ResponseEntity<Object> answer(HttpStatus status, String code, String message, List<ErrorBody.Detail> details) {

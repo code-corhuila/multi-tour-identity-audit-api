@@ -3,6 +3,7 @@ package co.edu.corhuila.multi_tour.identity_audit.adapters.http;
 import co.edu.corhuila.multi_tour.identity_audit.core.outbox.ListDueEvents;
 import co.edu.corhuila.multi_tour.identity_audit.core.outbox.MarkEventPublished;
 import co.edu.corhuila.multi_tour.identity_audit.core.outbox.OutboxEvent;
+import co.edu.corhuila.multi_tour.identity_audit.core.outbox.RecordFailedAttempt;
 import co.edu.corhuila.multi_tour.identity_audit.core.tenant.InvalidDataException;
 import co.edu.corhuila.multi_tour.identity_audit.core.tenant.Page;
 import com.fasterxml.jackson.annotation.JsonInclude;
@@ -14,6 +15,7 @@ import java.util.Set;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -26,11 +28,16 @@ class InternalOutboxController {
 
   private final ListDueEvents list;
   private final MarkEventPublished publish;
+  private final RecordFailedAttempt record;
 
-  InternalOutboxController(ListDueEvents list, MarkEventPublished publish) {
+  InternalOutboxController(ListDueEvents list, MarkEventPublished publish, RecordFailedAttempt record) {
     this.list = list;
     this.publish = publish;
+    this.record = record;
   }
+
+  /** A text, not anything else: a number or a boolean is a 400 (JsonConfig). */
+  record AttemptRequest(String error) {}
 
   @JsonInclude(JsonInclude.Include.NON_NULL)
   public record EventResponse(
@@ -64,5 +71,10 @@ class InternalOutboxController {
   @PostMapping("/{eventId}/published")
   EventResponse published(@PathVariable String eventId) {
     return EventResponse.of(publish.execute(eventId));
+  }
+
+  @PostMapping("/{eventId}/attempts")
+  EventResponse attempt(@PathVariable String eventId, @RequestBody AttemptRequest body) {
+    return EventResponse.of(record.execute(new RecordFailedAttempt.Command(eventId, body.error())));
   }
 }
