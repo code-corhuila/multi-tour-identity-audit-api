@@ -6,4 +6,12 @@ public class InvalidStatusTransitionException extends RuntimeException {
   public InvalidStatusTransitionException(TenantStatus from, String action) {
     super("A " + from + " tenant cannot " + action);
   }
+
+  public TenantStatus from() {
+    return null;
+  }
+
+  public String action() {
+    return null;
+  }
 }

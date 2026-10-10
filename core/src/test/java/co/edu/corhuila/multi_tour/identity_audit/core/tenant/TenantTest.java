@@ -170,4 +170,67 @@ class TenantTest {
     assertThatThrownBy(() -> Tenant.registerPending(ID, "acme", "Acme", "America/Bogota", "co", T0))
         .isInstanceOf(IllegalArgumentException.class);
   }
+
+  @Test
+  void D_texts_are_trimmed_and_the_limits_are_accepted() {
+    Tenant off = active().inactivate(" platform-admin ", " " + "r".repeat(500) + " ", T1);
+    assertThat(off.statusChangedBy()).isEqualTo("platform-admin");
+    assertThat(off.statusReason()).hasSize(500).doesNotStartWith(" ");
+    assertThat(active().inactivate("p".repeat(100), "why", T1).statusChangedBy()).hasSize(100);
+    Tenant named = Tenant.registerPending(ID, "acme", " " + "N".repeat(120) + " ", "America/Bogota", "CO", T0);
+    assertThat(named.commercialName()).hasSize(120);
+  }
+
+  @Test
+  void D_a_bad_argument_is_a_validation_error_even_when_the_status_would_refuse_the_change() {
+    Tenant failed = pending().failOnboarding(FailedStep.CREATE_ACCOUNT, T1);
+    assertThatThrownBy(() -> failed.inactivate("", "why", T1)).isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(() -> inactive().inactivate("platform-admin", "a\nb", T1))
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(() -> active().failOnboarding(null, T1)).isInstanceOf(IllegalArgumentException.class);
+  }
+
+  @Test
+  void D_each_status_carries_exactly_its_fields() {
+    Tenant failed = pending().failOnboarding(FailedStep.APPLY_STATUS, T1);
+    assertThat(failed.firstAdministratorMembershipId()).isNull();
+    assertThat(failed.statusChangedAt()).isEqualTo(T1);
+    assertThat(failed.updatedAt()).isEqualTo(T1);
+    Tenant done = active();
+    assertThat(done.failedStep()).isNull();
+    assertThat(done.statusChangedBy()).isNull();
+    assertThat(done.statusReason()).isNull();
+    assertThat(inactive().failedStep()).isNull();
+    assertThat(inactive().firstAdministratorMembershipId()).isEqualTo(MEMBERSHIP);
+  }
+
+  @Test
+  void D_the_time_is_required_and_kept_to_the_millisecond_that_the_database_keeps() {
+    assertThatThrownBy(() -> Tenant.registerPending(ID, "acme", "Acme", "America/Bogota", "CO", null))
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(() -> active().inactivate("platform-admin", "why", null))
+        .isInstanceOf(IllegalArgumentException.class);
+    Instant precise = Instant.parse("2026-10-10T10:00:00.123456789Z");
+    assertThat(Tenant.registerPending(ID, "acme", "Acme", "America/Bogota", "CO", precise).createdAt())
+        .isEqualTo(Instant.parse("2026-10-10T10:00:00.123Z"));
+  }
+
+  @Test
+  void D_the_time_zone_is_a_region_name_and_not_a_legacy_alias() {
+    for (String legacy : new String[] {"EST5EDT", "GMT0", "SystemV/AST4", "UTC+5", "", null}) {
+      assertThatThrownBy(() -> Tenant.registerPending(ID, "acme", "Acme", legacy, "CO", T0))
+          .as("time zone %s", legacy)
+          .isInstanceOf(IllegalArgumentException.class);
+    }
+    assertThat(Tenant.registerPending(ID, "acme", "Acme", "UTC", "CO", T0).timeZone()).isEqualTo("UTC");
+  }
+
+  @Test
+  void D_the_refusal_says_from_which_status_and_for_which_action() {
+    assertThatThrownBy(() -> active().reactivate("platform-admin", "why", T1))
+        .isInstanceOfSatisfying(InvalidStatusTransitionException.class, e -> {
+          assertThat(e.from()).isEqualTo(TenantStatus.ACTIVE);
+          assertThat(e.action()).isNotBlank();
+        });
+  }
 }
