@@ -63,18 +63,18 @@ public final class MongoTenantRepository implements TenantRepository {
 
   @Override
   public Optional<Tenant> findById(String tenantId) {
-    return Optional.ofNullable(tenants().find(eq("_id", tenantId)).first()).map(TenantDocuments::toTenant);
+    return Optional.ofNullable(ReadLimit.of(tenants().find(eq("_id", tenantId))).first()).map(TenantDocuments::toTenant);
   }
 
   @Override
   public Optional<Tenant> findByIdentifier(String identifier) {
-    return Optional.ofNullable(tenants().find(and(eq("identifier", identifier), in("tenantStatus", LIVE))).first())
+    return Optional.ofNullable(ReadLimit.of(tenants().find(and(eq("identifier", identifier), in("tenantStatus", LIVE)))).first())
         .map(TenantDocuments::toTenant);
   }
 
   @Override
   public Optional<Tenant> findByRepeatKey(RepeatKey key) {
-    Document stored = keys().find(and(eq("operation", key.operation()), eq("key", key.key()))).first();
+    Document stored = ReadLimit.of(keys().find(and(eq("operation", key.operation()), eq("key", key.key())))).first();
     return stored == null ? Optional.empty() : findById(stored.getString("resourceId"));
   }
 
@@ -107,12 +107,12 @@ public final class MongoTenantRepository implements TenantRepository {
   @Override
   public Page<Tenant> list(TenantStatus status, int page, int limit) {
     Bson filter = status == null ? new Document() : eq("tenantStatus", status.name());
-    long total = tenants().countDocuments(filter);
+    long total = tenants().countDocuments(filter, ReadLimit.count());
     long offset = (long) (page - 1) * limit;
     // newest first, and by id among equal times, so that a page does not repeat or skip a row
     List<Tenant> data = offset > Integer.MAX_VALUE
         ? List.of()
-        : tenants().find(filter).sort(Sorts.orderBy(Sorts.descending("createdAt"), Sorts.descending("_id")))
+        : ReadLimit.of(tenants().find(filter)).sort(Sorts.orderBy(Sorts.descending("createdAt"), Sorts.descending("_id")))
             .skip((int) offset).limit(limit).map(TenantDocuments::toTenant).into(new ArrayList<>());
     return new Page<>(data, page, limit, total);
   }

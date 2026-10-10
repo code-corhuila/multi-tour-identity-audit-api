@@ -43,18 +43,18 @@ public final class MongoOutboxRepository implements OutboxRepository {
   public Page<OutboxEvent> due(Instant now, int page, int limit) {
     Bson filter = and(eq("status", "PENDING"), lte("nextAttemptAt", Date.from(now)));
     // the order of idx_outbox_events_pending (status, nextAttemptAt, occurredAt), so that the sort reads the index
-    long total = events().countDocuments(filter);
+    long total = events().countDocuments(filter, ReadLimit.count());
     long offset = (long) (page - 1) * limit;
     List<OutboxEvent> data = offset > Integer.MAX_VALUE
         ? List.of()
-        : events().find(filter).sort(Sorts.orderBy(Sorts.ascending("nextAttemptAt"), Sorts.ascending("occurredAt"), Sorts.ascending("_id")))
+        : ReadLimit.of(events().find(filter)).sort(Sorts.orderBy(Sorts.ascending("nextAttemptAt"), Sorts.ascending("occurredAt"), Sorts.ascending("_id")))
             .skip((int) offset).limit(limit).map(MongoOutboxRepository::toEvent).into(new ArrayList<>());
     return new Page<>(data, page, limit, total);
   }
 
   @Override
   public Optional<OutboxEvent> findById(String eventId) {
-    return Optional.ofNullable(events().find(eq("_id", eventId)).first()).map(MongoOutboxRepository::toEvent);
+    return Optional.ofNullable(ReadLimit.of(events().find(eq("_id", eventId))).first()).map(MongoOutboxRepository::toEvent);
   }
 
   @Override
