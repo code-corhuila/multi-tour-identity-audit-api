@@ -1,6 +1,7 @@
 package co.edu.corhuila.multi_tour.identity_audit.adapters.persistence;
 
 import co.edu.corhuila.multi_tour.identity_audit.core.tenant.FailedStep;
+import co.edu.corhuila.multi_tour.identity_audit.core.tenant.InvalidDataException;
 import co.edu.corhuila.multi_tour.identity_audit.core.tenant.Tenant;
 import co.edu.corhuila.multi_tour.identity_audit.core.tenant.TenantEvent;
 import co.edu.corhuila.multi_tour.identity_audit.core.tenant.TenantStatus;
@@ -69,7 +70,16 @@ final class TenantDocuments {
         .append("occurredAt", at).append("status", "PENDING").append("attempts", 0).append("nextAttemptAt", at);
   }
 
+  /** A stored tenant that breaks an invariant of the core is a failure of ours, not a refusal of the caller. */
   static Tenant toTenant(Document document) {
+    try {
+      return build(document);
+    } catch (InvalidDataException broken) {
+      throw new IllegalStateException("The stored tenant " + document.getString("_id") + " breaks an invariant: " + broken.getMessage(), broken);
+    }
+  }
+
+  private static Tenant build(Document document) {
     return new Tenant(
         document.getString("_id"),
         document.getString("identifier"),
