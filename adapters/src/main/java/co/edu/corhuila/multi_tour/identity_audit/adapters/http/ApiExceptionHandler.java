@@ -1,5 +1,6 @@
 package co.edu.corhuila.multi_tour.identity_audit.adapters.http;
 
+import co.edu.corhuila.multi_tour.identity_audit.adapters.security.ForbiddenException;
 import co.edu.corhuila.multi_tour.identity_audit.core.tenant.ConcurrentChangeException;
 import co.edu.corhuila.multi_tour.identity_audit.core.tenant.IdentifierTakenException;
 import co.edu.corhuila.multi_tour.identity_audit.core.tenant.InvalidDataException;
@@ -38,6 +39,11 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     answer.putAll(headers);
     answer.setContentType(MediaType.APPLICATION_JSON);
     return new ResponseEntity<>(ErrorBody.of(status, CorrelationIdFilter.current()), answer, status);
+  }
+
+  @ExceptionHandler(ForbiddenException.class)
+  ResponseEntity<Object> forbidden(ForbiddenException e) {
+    return answer(HttpStatus.FORBIDDEN, "FORBIDDEN", e.getMessage(), null);
   }
 
   /** What the core refuses is told to the caller in the words the core wrote for it. */
