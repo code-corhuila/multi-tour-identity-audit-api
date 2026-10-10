@@ -19,7 +19,8 @@ import org.springframework.context.ConfigurableApplicationContext;
 
 class JwtFilterTest extends ShellTest {
 
-  private static final String PROTECTED = "/api/v1/identity-audit/tenants";
+  /** A protected route that is not built, so passing the filter shows as the 404 of an unknown route. */
+  private static final String PROTECTED = "/api/v1/identity-audit/tenants/not-built/audit-records";
 
   private Response call(String authorization) {
     var request = given();
