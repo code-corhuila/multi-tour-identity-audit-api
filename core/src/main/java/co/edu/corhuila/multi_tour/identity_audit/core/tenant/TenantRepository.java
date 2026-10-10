@@ -33,8 +33,10 @@ public interface TenantRepository {
 
   /**
    * Stores {@code next}, the changed tenant, and its events together, or neither, only if the stored tenant is
-   * still {@code expected}, the one the change was decided on. Comparing the whole tenant (status, who, why and
-   * when) sees one that changed and came back, which its status alone would not.
+   * still {@code expected}, the one the change was decided on. It compares everything a change can touch
+   * (status, administrator, who, why, when and the failed step): the identifier, the name, the time zone, the
+   * country and the creation time never change. Comparing the status alone would not see a tenant that
+   * changed and came back.
    *
    * @throws ConcurrentChangeException if another request changed it first
    */

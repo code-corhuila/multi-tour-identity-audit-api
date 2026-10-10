@@ -4,6 +4,7 @@ import static com.mongodb.client.model.Filters.and;
 import static com.mongodb.client.model.Filters.eq;
 import static com.mongodb.client.model.Filters.in;
 
+import co.edu.corhuila.multi_tour.identity_audit.core.tenant.ConcurrentChangeException;
 import co.edu.corhuila.multi_tour.identity_audit.core.tenant.IdentifierTakenException;
 import co.edu.corhuila.multi_tour.identity_audit.core.tenant.Page;
 import co.edu.corhuila.multi_tour.identity_audit.core.tenant.RepeatKey;
@@ -20,10 +21,13 @@ import com.mongodb.MongoWriteException;
 import com.mongodb.client.ClientSession;
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoCollection;
+import com.mongodb.client.model.Sorts;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Optional;
 import org.bson.Document;
+import org.bson.conversions.Bson;
 
 /**
  * The tenants in the database {@code identity_audit}, which {@code multi-tour-identity-audit-db} builds: its
@@ -51,6 +55,10 @@ public final class MongoTenantRepository implements TenantRepository {
 
   private MongoCollection<Document> keys() {
     return client.getDatabase(database).getCollection("idempotency_keys");
+  }
+
+  private MongoCollection<Document> outbox() {
+    return client.getDatabase(database).getCollection("outbox_events");
   }
 
   @Override
@@ -98,11 +106,31 @@ public final class MongoTenantRepository implements TenantRepository {
 
   @Override
   public Page<Tenant> list(TenantStatus status, int page, int limit) {
-    throw new UnsupportedOperationException();
+    Bson filter = status == null ? new Document() : eq("tenantStatus", status.name());
+    long total = tenants().countDocuments(filter);
+    long offset = (long) (page - 1) * limit;
+    // newest first, and by id among equal times, so that a page does not repeat or skip a row
+    List<Tenant> data = offset > Integer.MAX_VALUE
+        ? List.of()
+        : tenants().find(filter).sort(Sorts.orderBy(Sorts.descending("createdAt"), Sorts.descending("_id")))
+            .skip((int) offset).limit(limit).map(TenantDocuments::toTenant).into(new ArrayList<>());
+    return new Page<>(data, page, limit, total);
   }
 
   @Override
   public void update(Tenant expected, Tenant next, List<TenantEvent> events) {
-    throw new UnsupportedOperationException();
+    try (ClientSession session = client.startSession()) {
+      session.withTransaction(() -> {
+        // the filter holds the tenant the decision was taken on: a request that raced finds nothing to replace
+        if (tenants().replaceOne(session, TenantDocuments.stillIs(expected), TenantDocuments.toDocument(next))
+            .getMatchedCount() == 0) {
+          throw new ConcurrentChangeException(next.tenantId());
+        }
+        if (!events.isEmpty()) {
+          outbox().insertMany(session, events.stream().map(TenantDocuments::toEventDocument).toList());
+        }
+        return null;
+      }, DURABLE);
+    }
   }
 }
