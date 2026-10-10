@@ -12,6 +12,10 @@
 
   <artifactId>identity-audit-app</artifactId>
 
+  <properties>
+    <coverage.floor>0.93</coverage.floor>
+  </properties>
+
   <dependencies>
     <dependency>
       <groupId>co.edu.corhuila.multi_tour</groupId>

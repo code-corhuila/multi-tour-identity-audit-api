@@ -12,6 +12,10 @@
 
   <artifactId>identity-audit-adapters</artifactId>
 
+  <properties>
+    <coverage.floor>0.42</coverage.floor>
+  </properties>
+
   <dependencies>
     <dependency>
       <groupId>co.edu.corhuila.multi_tour</groupId>
