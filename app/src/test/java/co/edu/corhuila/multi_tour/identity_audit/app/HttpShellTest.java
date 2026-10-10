@@ -90,6 +90,20 @@ class HttpShellTest {
   }
 
   @Test
+  void C_failure_inside_a_filter_answers_the_envelope_with_the_same_trace_id() {
+    Response response =
+        given().header("X-Correlation-Id", "boom-trace").header("X-Boom-Filter", "1").get("/health");
+    assertEnvelope(response, 500, "INTERNAL_ERROR");
+    assertThat(response.header("X-Correlation-Id")).isEqualTo("boom-trace");
+    assertThat(response.asString()).doesNotContain("boom secret");
+  }
+
+  @Test
+  void C_the_error_page_itself_answers_the_envelope() {
+    assertEnvelope(given().get("/error"), 500, "INTERNAL_ERROR");
+  }
+
+  @Test
   void C_valid_correlation_id_is_reused_and_is_the_trace_id() {
     Response response = given().header("X-Correlation-Id", "run-42.a_b").get("/nowhere");
     assertThat(response.header("X-Correlation-Id")).isEqualTo("run-42.a_b");
