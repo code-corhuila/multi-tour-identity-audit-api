@@ -11,7 +11,7 @@ public record ErrorBody(String error, String message, List<Detail> details, Stri
   public record Detail(String field, String message) {}
 
   /** The envelope of an HTTP status; the codes are written here, not taken from a library enum that can change. */
-  static ErrorBody of(HttpStatusCode status, String traceId) {
+  public static ErrorBody of(HttpStatusCode status, String traceId) {
     int value = status.value();
     return switch (value) {
       case 400 -> new ErrorBody("VALIDATION_ERROR", "The request is not valid", null, traceId);
