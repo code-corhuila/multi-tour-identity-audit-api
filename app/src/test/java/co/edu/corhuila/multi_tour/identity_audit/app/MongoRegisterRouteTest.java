@@ -139,6 +139,13 @@ class MongoRegisterRouteTest extends ShellTest {
   }
 
   @Test
+  void C_a_body_over_16_kb_is_a_413_with_the_envelope_and_nothing_is_created() {
+    Response response = as(service(), KEY).filter(Contract.answers()).body("{\"commercialName\":\"" + "a".repeat(16 * 1024) + "\"}").post(ROUTE);
+    assertRefused(response, 413, "PAYLOAD_TOO_LARGE");
+    assertThat(count("tenants")).isZero();
+  }
+
+  @Test
   void C_a_body_that_is_not_json_is_a_415() {
     Response response =
         as(service(), KEY).filter(Contract.answers()).contentType("text/plain").body("acme").post(ROUTE);
