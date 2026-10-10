@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Identity Audit API
-  version: 0.6.0
+  version: 0.7.0
   description: |
     The contract this service is tested against (ADR-004 D7). It grows with each operation, written before the
     code; the design contract lives in `07-api/contracts/openapi/identity-audit.yaml` of `multi-tour-docs`.
@@ -321,6 +321,64 @@ paths:
           $ref: '#/components/responses/Error'
         '500':
           $ref: '#/components/responses/Error'
+  /api/v1/identity-audit/internal/outbox:
+    get:
+      summary: Read the events waiting, for job 7
+      description: The pending events that are due, across tenants, the one due for longest first. A `limit` outside 1 to 100, a status other than `PENDING` and a filter that is not declared are `400`. Role `SERVICE`.
+      operationId: listOutboxEvents
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema: {type: integer, minimum: 1, default: 1}
+        - name: limit
+          in: query
+          schema: {type: integer, minimum: 1, maximum: 100, default: 20}
+        - name: status
+          in: query
+          schema: {type: string, enum: [PENDING], default: PENDING}
+      responses:
+        '200':
+          description: One page of events
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OutboxPage'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+  /api/v1/identity-audit/internal/outbox/{eventId}/published:
+    post:
+      summary: Mark an event delivered
+      description: Only after every consumer answered `201` or `200`. A repeat answers `200` with the event as it is. Role `SERVICE`.
+      operationId: markOutboxEventPublished
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/EventIdPath'
+      responses:
+        '200':
+          description: The event is published
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OutboxEvent'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
 components:
   securitySchemes:
     bearerAuth:
@@ -339,6 +397,13 @@ components:
         pattern: '^\S+$'
     TenantIdPath:
       name: tenantId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    EventIdPath:
+      name: eventId
       in: path
       required: true
       schema:
@@ -448,6 +513,44 @@ components:
         tenantStatus:
           type: string
           enum: [ACTIVE, INACTIVE]
+    OutboxPage:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/OutboxEvent'
+        meta:
+          type: object
+          required: [page, limit, total, totalPages]
+          properties:
+            page: {type: integer, minimum: 1}
+            limit: {type: integer, minimum: 1, maximum: 100}
+            total: {type: integer, minimum: 0}
+            totalPages: {type: integer, minimum: 0}
+    OutboxEvent:
+      type: object
+      description: An event waiting to be delivered, with the envelope of ADR-004 D4
+      required: [eventId, eventType, eventVersion, aggregateId, payload, correlationId, occurredAt, status, attempts, nextAttemptAt]
+      properties:
+        eventId: {type: string, format: uuid}
+        eventType: {type: string}
+        eventVersion: {type: integer, minimum: 1}
+        tenantId: {type: string, format: uuid}
+        aggregateId: {type: string, format: uuid}
+        actorId: {type: string}
+        reason: {type: string}
+        payload:
+          type: object
+          description: The full new state of the aggregate; never a credential
+        correlationId: {type: string}
+        occurredAt: {type: string, format: date-time}
+        publishedAt: {type: string, format: date-time}
+        status: {type: string, enum: [PENDING, PUBLISHED, FAILED]}
+        attempts: {type: integer, minimum: 0}
+        lastError: {type: string}
+        nextAttemptAt: {type: string, format: date-time}
     TenantResponse:
       type: object
       required: [tenantId, identifier, commercialName, tenantStatus, timeZone, country, createdAt]
