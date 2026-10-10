@@ -1,11 +1,12 @@
 openapi: 3.0.3
 info:
   title: Identity Audit API
-  version: 0.1.0
+  version: 0.2.0
   description: |
-    The contract this service is tested against (ADR-004 D7). It grows with each operation, written
-    before the code; the design contract lives in `07-api/contracts/openapi/identity-audit.yaml` of
-    `multi-tour-docs`. Every error uses the single envelope below.
+    The contract this service is tested against (ADR-004 D7). It grows with each operation, written before the
+    code; the design contract lives in `07-api/contracts/openapi/identity-audit.yaml` of `multi-tour-docs`.
+    The paths are the real ones, with the prefix `/api/v1/identity-audit` that the gateway routes to this
+    service. Every error uses the single envelope below. Routes under `/internal/` answer only the role `SERVICE`.
 paths:
   /health:
     get:
@@ -23,7 +24,78 @@ paths:
                   status:
                     type: string
                     enum: [ok]
+  /api/v1/identity-audit/internal/tenants:
+    post:
+      summary: Step 1 of onboard-tenant, create the tenant as pending
+      description: A repeat of the same `Idempotency-Key` answers `200` with the first tenant, whatever the body says now. Role `SERVICE`.
+      operationId: registerPendingTenant
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterTenantRequest'
+      responses:
+        '201':
+          description: Tenant created as pending
+          headers:
+            Location:
+              description: Path of the created tenant
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantResponse'
+        '200':
+          description: Repeated request with the same `Idempotency-Key`; the tenant already created, as it is now
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantResponse'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '415':
+          $ref: '#/components/responses/Error'
+        '422':
+          description: The identifier is used by a live tenant; the message names it
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/Error'
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema:
+        type: string
+        minLength: 8
+        maxLength: 128
+        pattern: '^\S+$'
+  responses:
+    Error:
+      description: An error in the single envelope; the code says which
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
   schemas:
     ErrorResponse:
       type: object
@@ -44,3 +116,54 @@ components:
                 type: string
         traceId:
           type: string
+    RegisterTenantRequest:
+      type: object
+      required: [identifier, commercialName, timeZone, country]
+      additionalProperties: false
+      properties:
+        identifier:
+          type: string
+          minLength: 3
+          maxLength: 40
+          pattern: '^[a-z0-9]+(-[a-z0-9]+)*$'
+        commercialName:
+          type: string
+          minLength: 1
+          maxLength: 120
+        timeZone:
+          type: string
+          maxLength: 64
+        country:
+          type: string
+          pattern: '^[A-Z]{2}$'
+    TenantResponse:
+      type: object
+      required: [tenantId, identifier, commercialName, tenantStatus, timeZone, country, createdAt]
+      properties:
+        tenantId:
+          type: string
+          format: uuid
+        identifier:
+          type: string
+        commercialName:
+          type: string
+        tenantStatus:
+          type: string
+          enum: [PENDING, ACTIVE, INACTIVE, FAILED]
+        timeZone:
+          type: string
+        country:
+          type: string
+        firstAdministratorMembershipId:
+          type: string
+          format: uuid
+        statusChangedAt: {type: string, format: date-time}
+        statusChangedBy: {type: string}
+        statusReason: {type: string}
+        failedStep: {type: string, enum: [CREATE_ACCOUNT, APPLY_STATUS]}
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
