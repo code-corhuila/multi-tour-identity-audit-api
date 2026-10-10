@@ -23,6 +23,16 @@ final class InMemoryTenants implements TenantRepository {
   }
 
   @Override
+  public Page<Tenant> list(TenantStatus status, int page, int limit) {
+    List<Tenant> all = tenants.values().stream()
+        .filter(t -> status == null || t.status() == status)
+        .sorted(java.util.Comparator.comparing(Tenant::createdAt).reversed())
+        .toList();
+    int from = Math.min((page - 1) * limit, all.size());
+    return new Page<>(all.subList(from, Math.min(from + limit, all.size())), page, limit, all.size());
+  }
+
+  @Override
   public Optional<Tenant> findByIdentifier(String identifier) {
     return tenants.values().stream()
         .filter(t -> t.identifier().equals(identifier) && t.status() != TenantStatus.FAILED)
