@@ -17,6 +17,10 @@ public record Caller(String subject, String tenantId, Set<Role> roles) {
     }
     roles = Set.copyOf(roles);
     tenantId = tenantId == null || tenantId.isBlank() ? null : tenantId;
+    boolean opensARoute = roles.contains(Role.PLATFORM_ADMINISTRATOR) || roles.contains(Role.SERVICE);
+    if (opensARoute && roles.stream().anyMatch(r -> r != Role.PLATFORM_ADMINISTRATOR && r != Role.SERVICE)) {
+      throw new IllegalArgumentException("The role of the platform or of a service is never mixed with a role of a tenant");
+    }
     if (roles.contains(Role.PLATFORM_ADMINISTRATOR) && tenantId != null) {
       throw new IllegalArgumentException("The Platform Administrator has no tenant");
     }
