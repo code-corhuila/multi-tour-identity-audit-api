@@ -12,6 +12,10 @@
 
   <artifactId>identity-audit-core</artifactId>
 
+  <properties>
+    <coverage.floor>0.97</coverage.floor>
+  </properties>
+
   <dependencies>
     <dependency>
       <groupId>org.junit.jupiter</groupId>
