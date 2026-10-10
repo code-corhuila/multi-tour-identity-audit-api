@@ -28,7 +28,10 @@ class DomainErrorsTest extends ShellTest {
 
   @Test
   void C_an_unknown_tenant_is_a_404() {
-    assertEnvelope(failure("not-found"), 404, "NOT_FOUND");
+    Response response = failure("not-found");
+    assertEnvelope(response, 404, "NOT_FOUND");
+    // the message is fixed: what the caller wrote, or an id, is never reflected back
+    assertThat(response.jsonPath().getString("message")).isEqualTo("There is no such tenant");
   }
 
   @Test
