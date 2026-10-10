@@ -119,7 +119,7 @@ class MongoOutboxRoutesTest extends ShellTest {
     assertRefused(given().header("Authorization", "Bearer " + person).filter(Contract.answers()).get(OUTBOX), 403, "FORBIDDEN");
     assertRefused(given().header("Authorization", "Bearer " + person).filter(Contract.answers())
         .post(OUTBOX + "/" + id + "/published"), 403, "FORBIDDEN");
-    assertRefused(service().filter(Contract.answers()).get("/api/v1/identity-audit/internal;x=1/outbox"), 403, "FORBIDDEN");
+    assertRefused(given().filter(Contract.answers()).get("/api/v1/identity-audit/internal;x=1/outbox"), 401, "UNAUTHORIZED");
     assertThat(pending("").jsonPath().getList("data")).hasSize(1);
   }
 }
