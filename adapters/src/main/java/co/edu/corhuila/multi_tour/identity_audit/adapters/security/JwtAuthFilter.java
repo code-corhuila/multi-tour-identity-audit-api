@@ -32,16 +32,14 @@ import org.springframework.web.filter.OncePerRequestFilter;
 /**
  * Validates the token by itself (norm 5.3): algorithm exactly RS256, signed by the key of the security
  * microservice, {@code exp} and {@code sub} required, 30 s of tolerance. A valid one becomes the
- * {@link Caller} of the request; anything else is a 401 with the single envelope. Routes under
- * {@code /api/v1/} are protected, except the public profile; the other routes (health) are not.
+ * {@link Caller} of the request; anything else is a 401 with the single envelope. Which routes need
+ * one is decided by {@link RouteGuard}.
  */
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE + 10)
 public class JwtAuthFilter extends OncePerRequestFilter {
 
   public static final String CALLER = JwtAuthFilter.class.getName() + ".caller";
-  private static final String PROTECTED_PREFIX = "/api/v1/";
-  private static final String PUBLIC_PREFIX = "/api/v1/identity-audit/public/";
   private static final long LEEWAY_MILLIS = 30_000;
 
   private final RSASSAVerifier verifier;
@@ -54,8 +52,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
   @Override
   protected boolean shouldNotFilter(HttpServletRequest request) {
-    String path = request.getRequestURI();
-    return !path.startsWith(PROTECTED_PREFIX) || path.startsWith(PUBLIC_PREFIX);
+    return !RouteGuard.needsToken(request.getRequestURI());
   }
 
   @Override
@@ -77,11 +74,11 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
   /** The caller of a valid token, or null for anything that is not one. */
   private Caller caller(String authorization) {
-    if (authorization == null || !authorization.startsWith("Bearer ")) {
+    if (authorization == null || !authorization.regionMatches(true, 0, "Bearer ", 0, 7)) {
       return null;
     }
     try {
-      SignedJWT jwt = SignedJWT.parse(authorization.substring("Bearer ".length()).trim());
+      SignedJWT jwt = SignedJWT.parse(authorization.substring(7).trim());
       if (!JWSAlgorithm.RS256.equals(jwt.getHeader().getAlgorithm()) || !jwt.verify(verifier)) {
         return null;
       }
@@ -96,7 +93,8 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         roles.add(Role.valueOf(name));
       }
       return new Caller(claims.getSubject(), claims.getStringClaim("tenantId"), roles);
-    } catch (ParseException | JOSEException | IllegalArgumentException e) {
+    } catch (ParseException | JOSEException | RuntimeException e) {
+      // anything a hostile but signed token can provoke is a refusal, never a server error
       return null;
     }
   }

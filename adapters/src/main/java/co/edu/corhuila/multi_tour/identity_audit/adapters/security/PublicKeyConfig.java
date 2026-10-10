@@ -16,6 +16,8 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 class PublicKeyConfig {
 
+  private static final int MIN_BITS = 2048;
+
   @Bean
   RSAPublicKey jwtPublicKey(
       @Value("${JWT_PUBLIC_KEY:}") String inline, @Value("${JWT_PUBLIC_KEY_FILE:}") String file)
@@ -30,8 +32,13 @@ class PublicKeyConfig {
             .replace("-----BEGIN PUBLIC KEY-----", "")
             .replace("-----END PUBLIC KEY-----", "")
             .replaceAll("\\s", "");
-    return (RSAPublicKey)
-        KeyFactory.getInstance("RSA")
-            .generatePublic(new X509EncodedKeySpec(Base64.getDecoder().decode(base64)));
+    RSAPublicKey key =
+        (RSAPublicKey)
+            KeyFactory.getInstance("RSA")
+                .generatePublic(new X509EncodedKeySpec(Base64.getDecoder().decode(base64)));
+    if (key.getModulus().bitLength() < MIN_BITS) {
+      throw new IllegalStateException("The public key must be at least " + MIN_BITS + " bits");
+    }
+    return key;
   }
 }
