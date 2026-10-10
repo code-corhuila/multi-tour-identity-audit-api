@@ -1,6 +1,10 @@
 package co.edu.corhuila.multi_tour.identity_audit.app;
 
+import co.edu.corhuila.multi_tour.identity_audit.adapters.persistence.MongoOutboxRepository;
 import co.edu.corhuila.multi_tour.identity_audit.adapters.persistence.MongoTenantRepository;
+import co.edu.corhuila.multi_tour.identity_audit.core.outbox.ListDueEvents;
+import co.edu.corhuila.multi_tour.identity_audit.core.outbox.MarkEventPublished;
+import co.edu.corhuila.multi_tour.identity_audit.core.outbox.OutboxRepository;
 import co.edu.corhuila.multi_tour.identity_audit.core.tenant.CompleteOnboarding;
 import co.edu.corhuila.multi_tour.identity_audit.core.tenant.ConsultTenant;
 import co.edu.corhuila.multi_tour.identity_audit.core.tenant.FailOnboarding;
@@ -119,5 +123,20 @@ class CompositionRoot {
   @Bean
   GetPublicProfile getPublicProfile(TenantRepository tenants) {
     return new GetPublicProfile(tenants);
+  }
+
+  @Bean
+  OutboxRepository outboxRepository(MongoClient client, ConnectionString connection) {
+    return new MongoOutboxRepository(client, connection.getDatabase());
+  }
+
+  @Bean
+  ListDueEvents listDueEvents(OutboxRepository outbox, Clock clock) {
+    return new ListDueEvents(outbox, clock);
+  }
+
+  @Bean
+  MarkEventPublished markEventPublished(OutboxRepository outbox, Clock clock) {
+    return new MarkEventPublished(outbox, clock);
   }
 }
