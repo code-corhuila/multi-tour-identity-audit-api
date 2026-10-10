@@ -106,7 +106,7 @@ class JwtFilterTest extends ShellTest {
 
   @Test
   void C_a_subject_that_is_blank_padded_too_long_or_with_a_control_character_is_a_401_and_100_characters_pass() {
-    for (String bad : List.of(" ", " account-1", "account-1 ", "a".repeat(101), "acc\u0007ount")) {
+    for (String bad : List.of("", " ", " account-1", "account-1 ", "a".repeat(101), "acc\u0007ount", "acc\u202eount", "acc\u2028ount")) {
       assertRefused(bearer(Tokens.claims(bad, 600, List.of("PLATFORM_ADMINISTRATOR"), null)));
     }
     assertThat(call(bearer(Tokens.claims("a".repeat(100), 600, List.of("PLATFORM_ADMINISTRATOR"), null))).statusCode()).isEqualTo(404);
