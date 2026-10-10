@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Identity Audit API
-  version: 0.2.0
+  version: 0.3.0
   description: |
     The contract this service is tested against (ADR-004 D7). It grows with each operation, written before the
     code; the design contract lives in `07-api/contracts/openapi/identity-audit.yaml` of `multi-tour-docs`.
@@ -73,6 +73,90 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '500':
           $ref: '#/components/responses/Error'
+  /api/v1/identity-audit/internal/tenants/{tenantId}/complete-onboarding:
+    post:
+      summary: Step 3 of onboard-tenant, record the first Administrator and apply the initial status
+      description: |
+        A pending tenant becomes `ACTIVE` or `INACTIVE` and `TenantCreated` is written to the outbox in the same
+        transaction. Sending the same Administrator again answers `200` with the tenant as it is. Role `SERVICE`.
+      operationId: completeTenantOnboarding
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/TenantIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompleteOnboardingRequest'
+      responses:
+        '200':
+          description: Onboarding completed, or already completed with this Administrator
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantResponse'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '415':
+          $ref: '#/components/responses/Error'
+        '422':
+          description: The tenant is not pending (`INVALID_STATUS_TRANSITION`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/Error'
+  /api/v1/identity-audit/internal/tenants/{tenantId}/fail-onboarding:
+    post:
+      summary: Compensation of onboard-tenant, mark the pending tenant failed
+      description: |
+        A pending tenant becomes `FAILED` with the step that failed, so its identifier can be used again. It is a
+        compensation: the same step again on a failed tenant answers `200`. Role `SERVICE`.
+      operationId: failTenantOnboarding
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/TenantIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FailOnboardingRequest'
+      responses:
+        '200':
+          description: The tenant is marked failed, or already was with this step
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantResponse'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '415':
+          $ref: '#/components/responses/Error'
+        '422':
+          description: The tenant is not pending (`INVALID_STATUS_TRANSITION`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/Error'
 components:
   securitySchemes:
     bearerAuth:
@@ -89,6 +173,13 @@ components:
         minLength: 8
         maxLength: 128
         pattern: '^\S+$'
+    TenantIdPath:
+      name: tenantId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
   responses:
     Error:
       description: An error in the single envelope; the code says which
@@ -136,6 +227,25 @@ components:
         country:
           type: string
           pattern: '^[A-Z]{2}$'
+    CompleteOnboardingRequest:
+      type: object
+      required: [firstAdministratorMembershipId, initialStatus]
+      additionalProperties: false
+      properties:
+        firstAdministratorMembershipId:
+          type: string
+          format: uuid
+        initialStatus:
+          type: string
+          enum: [ACTIVE, INACTIVE]
+    FailOnboardingRequest:
+      type: object
+      required: [failedStep]
+      additionalProperties: false
+      properties:
+        failedStep:
+          type: string
+          enum: [CREATE_ACCOUNT, APPLY_STATUS]
     TenantResponse:
       type: object
       required: [tenantId, identifier, commercialName, tenantStatus, timeZone, country, createdAt]
