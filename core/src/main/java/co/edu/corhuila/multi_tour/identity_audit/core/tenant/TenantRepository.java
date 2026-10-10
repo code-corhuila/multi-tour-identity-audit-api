@@ -1,9 +1,12 @@
 package co.edu.corhuila.multi_tour.identity_audit.core.tenant;
 
+import java.util.List;
 import java.util.Optional;
 
 /** Where tenants are kept. The adapter writes a creation and its repeat key in one transaction (plan D-05). */
 public interface TenantRepository {
+
+  Optional<Tenant> findById(String tenantId);
 
   /** The tenant that holds the identifier: pending, active or inactive. A failed tenant does not hold it. */
   Optional<Tenant> findByIdentifier(String identifier);
@@ -20,4 +23,12 @@ public interface TenantRepository {
    * @throws IdentifierTakenException if a live tenant got the identifier first
    */
   void insert(Tenant tenant, RepeatKey key);
+
+  /**
+   * Stores the changed tenant and its events together, or neither, only if the stored tenant is still in the
+   * status the change was decided on.
+   *
+   * @throws ConcurrentChangeException if another request changed it first
+   */
+  void update(Tenant next, TenantStatus expectedStatus, List<TenantEvent> events);
 }
