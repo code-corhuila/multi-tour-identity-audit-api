@@ -27,6 +27,11 @@ class DomainErrorsTest extends ShellTest {
   }
 
   @Test
+  void C_a_valid_token_that_the_role_does_not_allow_is_a_403() {
+    assertEnvelope(failure("forbidden"), 403, "FORBIDDEN");
+  }
+
+  @Test
   void C_an_unknown_tenant_is_a_404() {
     Response response = failure("not-found");
     assertEnvelope(response, 404, "NOT_FOUND");
