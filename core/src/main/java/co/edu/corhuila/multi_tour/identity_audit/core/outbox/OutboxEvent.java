@@ -1,6 +1,7 @@
 package co.edu.corhuila.multi_tour.identity_audit.core.outbox;
 
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Map;
 
 /**
@@ -19,20 +20,23 @@ public record OutboxEvent(
   }
 
   /** Published, whatever it was: a delivery that did succeed is true even if the event had been given up. */
-  public OutboxEvent published(Instant now) {
+  public OutboxEvent published(Instant at) {
     if (status == Status.PUBLISHED) {
       return this;
     }
+    Instant now = at.truncatedTo(ChronoUnit.MILLIS);
     return new OutboxEvent(
         eventId, eventType, eventVersion, tenantId, aggregateId, actorId, reason, payload, correlationId, occurredAt,
         now, Status.PUBLISHED, attempts, lastError, nextAttemptAt);
   }
 
   /** One more failed delivery; an event no longer pending is not touched by a report that came late. */
-  public OutboxEvent withFailedAttempt(String error, Instant now, RetryPolicy policy) {
+  public OutboxEvent withFailedAttempt(String error, Instant at, RetryPolicy policy) {
     if (status != Status.PENDING) {
       return this;
     }
+    // the database keeps milliseconds: what is answered is what is stored
+    Instant now = at.truncatedTo(ChronoUnit.MILLIS);
     int count = attempts + 1;
     boolean lastOne = count >= policy.maxAttempts();
     return new OutboxEvent(
