@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Identity Audit API
-  version: 0.9.0
+  version: 0.10.0
   description: |
     The contract this service is tested against (ADR-004 D7). It grows with each operation, written before the
     code; the design contract lives in `07-api/contracts/openapi/identity-audit.yaml` of `multi-tour-docs`.
@@ -19,11 +19,22 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [status]
+                required: [status, timestamp, dependencies]
                 properties:
                   status:
                     type: string
                     enum: [ok]
+                  timestamp:
+                    type: string
+                    format: date-time
+                  dependencies:
+                    type: object
+                    required: [database]
+                    properties:
+                      database:
+                        type: string
+                        enum: [ok, down]
+                        description: Whether the database answered a ping within 2 s; a database that is down does not make the answer a 503
   /api/v1/identity-audit/internal/tenants:
     post:
       summary: Step 1 of onboard-tenant, create the tenant as pending
