@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Identity Audit API
-  version: 0.10.0
+  version: 0.11.0
   description: |
     The contract this service is tested against (ADR-004 D7). It grows with each operation, written before the
     code; the design contract lives in `07-api/contracts/openapi/identity-audit.yaml` of `multi-tour-docs`.
@@ -121,7 +121,7 @@ paths:
         '415':
           $ref: '#/components/responses/Error'
         '422':
-          description: The tenant is not pending (`INVALID_STATUS_TRANSITION`)
+          description: The tenant is not pending (`INVALID_STATUS_TRANSITION`), or the change lost the race twice in a row (`BUSINESS_RULE_VIOLATION`)
           content:
             application/json:
               schema:
@@ -163,7 +163,7 @@ paths:
         '415':
           $ref: '#/components/responses/Error'
         '422':
-          description: The tenant is not pending (`INVALID_STATUS_TRANSITION`)
+          description: The tenant is not pending (`INVALID_STATUS_TRANSITION`), or the change lost the race twice in a row (`BUSINESS_RULE_VIOLATION`)
           content:
             application/json:
               schema:
@@ -263,7 +263,7 @@ paths:
         '415':
           $ref: '#/components/responses/Error'
         '422':
-          description: The tenant is not active (`INVALID_STATUS_TRANSITION`)
+          description: The tenant is not active (`INVALID_STATUS_TRANSITION`), or the change lost the race twice in a row (`BUSINESS_RULE_VIOLATION`)
           content:
             application/json:
               schema:
@@ -305,7 +305,7 @@ paths:
         '415':
           $ref: '#/components/responses/Error'
         '422':
-          description: The tenant is not inactive (`INVALID_STATUS_TRANSITION`)
+          description: The tenant is not inactive (`INVALID_STATUS_TRANSITION`), or the change lost the race twice in a row (`BUSINESS_RULE_VIOLATION`)
           content:
             application/json:
               schema:
@@ -400,6 +400,12 @@ paths:
           $ref: '#/components/responses/Error'
         '413':
           $ref: '#/components/responses/Error'
+        '422':
+          description: The change lost the race twice in a row (`BUSINESS_RULE_VIOLATION`); the caller sends it again
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '500':
           $ref: '#/components/responses/Error'
   /api/v1/identity-audit/internal/outbox/{eventId}/attempts:
@@ -436,6 +442,12 @@ paths:
           $ref: '#/components/responses/Error'
         '415':
           $ref: '#/components/responses/Error'
+        '422':
+          description: The change lost the race twice in a row (`BUSINESS_RULE_VIOLATION`); the caller sends it again
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '500':
           $ref: '#/components/responses/Error'
 components:
