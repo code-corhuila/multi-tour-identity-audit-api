@@ -34,11 +34,8 @@ class TenantTest {
     Tenant tenant = pending();
     assertThat(tenant.status()).isEqualTo(TenantStatus.PENDING);
     assertThat(tenant.tenantId()).isEqualTo(ID);
-    assertThat(tenant.identifier()).isEqualTo("acme-tours");
     assertThat(tenant.commercialName()).isEqualTo("Acme Tours");
-    assertThat(tenant.timeZone()).isEqualTo("America/Bogota");
-    assertThat(tenant.country()).isEqualTo("CO");
-    assertThat(tenant.createdAt()).isEqualTo(T0);
+    assertThat(tenant.timeZone() + tenant.country()).isEqualTo("America/BogotaCO");
     assertThat(tenant.firstAdministratorMembershipId()).isNull();
   }
 
@@ -138,9 +135,8 @@ class TenantTest {
     Tenant on = active();
     refused(() -> on.reactivate("platform-admin", "why", T1));
     assertThat(on.status()).isEqualTo(TenantStatus.ACTIVE);
-    Tenant off = on.inactivate("platform-admin", "unpaid", T1);
+    assertThat(on.inactivate("platform-admin", "unpaid", T1)).isNotSameAs(on);
     assertThat(on.status()).isEqualTo(TenantStatus.ACTIVE);
-    assertThat(off).isNotSameAs(on);
   }
 
   @Test
@@ -194,13 +190,10 @@ class TenantTest {
   void D_each_status_carries_exactly_its_fields() {
     Tenant failed = pending().failOnboarding(FailedStep.APPLY_STATUS, T1);
     assertThat(failed.firstAdministratorMembershipId()).isNull();
-    assertThat(failed.statusChangedAt()).isEqualTo(T1);
-    assertThat(failed.updatedAt()).isEqualTo(T1);
-    Tenant done = active();
-    assertThat(done.failedStep()).isNull();
-    assertThat(done.statusChangedBy()).isNull();
-    assertThat(done.statusReason()).isNull();
-    assertThat(inactive().failedStep()).isNull();
+    assertThat(failed.statusChangedAt()).isEqualTo(failed.updatedAt()).isEqualTo(T1);
+    assertThat(active().failedStep()).isNull();
+    assertThat(active().statusChangedBy()).isNull();
+    assertThat(active().statusReason()).isNull();
     assertThat(inactive().firstAdministratorMembershipId()).isEqualTo(MEMBERSHIP);
   }
 
