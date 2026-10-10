@@ -72,6 +72,10 @@ class MongoOutboxRepositoryTest {
     put(6, NOW.minusSeconds(600), NOW, "FAILED");
     var first = outbox.due(NOW, 1, 2);
     assertThat(first.data()).extracting(OutboxEvent::eventId).containsExactly(id(1), id(2));
+    // an event retried is due when its wait ends: the one due for longest goes first, whatever its age
+    put(7, NOW.minusSeconds(10), NOW.minusSeconds(100), "PENDING");
+    assertThat(outbox.due(NOW, 1, 1).data()).extracting(OutboxEvent::eventId).containsExactly(id(7));
+    client.getDatabase(url.getDatabase()).getCollection("outbox_events").deleteOne(new Document("_id", id(7)));
     assertThat(first.total()).isEqualTo(3);
     assertThat(outbox.due(NOW, 2, 2).data()).extracting(OutboxEvent::eventId).containsExactly(id(3));
     var past = outbox.due(NOW, 9, 2);
@@ -116,11 +120,12 @@ class MongoOutboxRepositoryTest {
     assertThat(raw(1).getString("status")).isEqualTo("PUBLISHED");
     assertThat(raw(1).getDate("publishedAt")).isEqualTo(Date.from(NOW.plusSeconds(1)));
     var two = outbox.findById(id(2)).orElseThrow();
-    outbox.update(two, two.withFailedAttempt("consumer answered 503", NOW, POLICY));
+    var failed = two.withFailedAttempt("e".repeat(1000), Instant.parse("2026-10-10T10:00:00.123456789Z"), POLICY);
+    outbox.update(two, failed);
     assertThat(raw(2).getInteger("attempts")).isEqualTo(1);
-    assertThat(raw(2).getString("lastError")).isEqualTo("consumer answered 503");
+    assertThat(raw(2).getString("lastError")).hasSize(1000);
     assertThat(raw(2).getDate("nextAttemptAt")).isEqualTo(Date.from(NOW.plusSeconds(5)));
-    assertThat(outbox.findById(id(2)).orElseThrow().attempts()).isEqualTo(1);
+    assertThat(outbox.findById(id(2))).contains(failed);
   }
 
   @Test
