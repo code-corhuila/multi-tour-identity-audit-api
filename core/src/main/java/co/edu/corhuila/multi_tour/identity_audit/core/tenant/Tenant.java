@@ -38,11 +38,7 @@ public record Tenant(
   public Tenant {
     require(tenantId != null && UUID_FORMAT.matcher(tenantId).matches(), "The tenant id is a lowercase UUID");
     require(
-        identifier != null
-            && identifier.length() >= 3
-            && identifier.length() <= 40
-            && IDENTIFIER.matcher(identifier).matches(),
-        "The identifier is 3 to 40 lowercase letters, digits and single hyphens");
+        isIdentifier(identifier), "The identifier is 3 to 40 lowercase letters, digits and single hyphens");
     commercialName = text(commercialName, 120, "The commercial name");
     require(
         timeZone != null && REGION.matcher(timeZone).matches() && ZoneId.getAvailableZoneIds().contains(timeZone),
@@ -129,6 +125,11 @@ public record Tenant(
     if (status != required) {
       throw new InvalidStatusTransitionException(status, action);
     }
+  }
+
+  /** Whether a text is written like an identifier: 3 to 40 lowercase letters, digits and single hyphens. */
+  static boolean isIdentifier(String value) {
+    return value != null && value.length() >= 3 && value.length() <= 40 && IDENTIFIER.matcher(value).matches();
   }
 
   /** A lowercase UUID, as the first Administrator and the tenant are identified. */

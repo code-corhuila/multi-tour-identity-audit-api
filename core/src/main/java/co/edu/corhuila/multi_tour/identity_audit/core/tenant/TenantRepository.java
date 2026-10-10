@@ -8,6 +8,13 @@ public interface TenantRepository {
 
   Optional<Tenant> findById(String tenantId);
 
+  /**
+   * The tenants of one status, or (null) of all, newest first by creation and then by id, so that a tie does not
+   * repeat or skip a row between pages. A page beyond the last is empty with the real total; compute the offset
+   * as a long.
+   */
+  Page<Tenant> list(TenantStatus status, int page, int limit);
+
   /** The tenant that holds the identifier: pending, active or inactive. A failed tenant does not hold it. */
   Optional<Tenant> findByIdentifier(String identifier);
 
