@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Identity Audit API
-  version: 0.5.0
+  version: 0.6.0
   description: |
     The contract this service is tested against (ADR-004 D7). It grows with each operation, written before the
     code; the design contract lives in `07-api/contracts/openapi/identity-audit.yaml` of `multi-tour-docs`.
@@ -291,6 +291,36 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '500':
           $ref: '#/components/responses/Error'
+  /api/v1/identity-audit/public/tenants/{identifier}:
+    get:
+      summary: Public profile of a tenant, behind the link /t/{identifier}
+      description: It reveals the name, the identifier and the status, nothing more. A tenant that is unknown, pending or failed is `404`; an inactive one answers `200` with its status. No token.
+      operationId: getPublicTenantProfile
+      security: []
+      parameters:
+        - name: identifier
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[a-z0-9-]{1,40}$'
+      responses:
+        '200':
+          description: The public profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantPublicProfile'
+        '401':
+          description: The path is not written like an identifier (capitals, encoded characters, more than 40), so it is not public and needs a token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
 components:
   securitySchemes:
     bearerAuth:
@@ -406,6 +436,18 @@ components:
           description: Trimmed; no control character, new lines included; at most 500 UTF-16 units
           minLength: 1
           maxLength: 500
+    TenantPublicProfile:
+      type: object
+      required: [identifier, commercialName, tenantStatus]
+      additionalProperties: false
+      properties:
+        identifier:
+          type: string
+        commercialName:
+          type: string
+        tenantStatus:
+          type: string
+          enum: [ACTIVE, INACTIVE]
     TenantResponse:
       type: object
       required: [tenantId, identifier, commercialName, tenantStatus, timeZone, country, createdAt]
