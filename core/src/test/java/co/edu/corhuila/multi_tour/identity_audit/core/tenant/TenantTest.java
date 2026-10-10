@@ -226,4 +226,40 @@ class TenantTest {
           assertThat(e.action()).isNotBlank();
         });
   }
+
+  /** A tenant as the database could give it back: the canonical constructor with the fields of the change. */
+  private static Tenant read(TenantStatus status, String membership, String by, String reason) {
+    return new Tenant(ID, "acme-tours", "Acme Tours", "America/Bogota", "CO", T0, status, membership, T1, by, reason,
+        null, T1);
+  }
+
+  @Test
+  void D_a_tenant_read_from_the_database_is_checked_for_who_and_why_too() {
+    assertThat(read(TenantStatus.INACTIVE, MEMBERSHIP, "platform-admin", "unpaid").statusReason()).isEqualTo("unpaid");
+    assertThat(read(TenantStatus.INACTIVE, MEMBERSHIP, null, null).statusChangedBy()).isNull();
+    for (String[] bad : new String[][] {{" ", "why"}, {"who", " "}, {"who", null}, {null, "why"}, {"who", "a\nb"},
+        {"w".repeat(101), "why"}, {"who", "r".repeat(501)}}) {
+      assertThatThrownBy(() -> read(TenantStatus.ACTIVE, MEMBERSHIP, bad[0], bad[1]))
+          .as("%s / %s", bad[0], bad[1])
+          .isInstanceOf(IllegalArgumentException.class);
+    }
+    assertThatThrownBy(() -> read(TenantStatus.PENDING, null, "who", "why")).isInstanceOf(IllegalArgumentException.class);
+  }
+
+  @Test
+  void D_a_bad_time_or_administrator_is_a_validation_error_before_a_refused_transition() {
+    Tenant failed = pending().failOnboarding(FailedStep.CREATE_ACCOUNT, T1);
+    assertThatThrownBy(() -> failed.completeOnboarding("not-a-uuid", TenantStatus.ACTIVE, T1))
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(() -> failed.failOnboarding(FailedStep.CREATE_ACCOUNT, null))
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(() -> inactive().inactivate("platform-admin", "why", null))
+        .isInstanceOf(IllegalArgumentException.class);
+  }
+
+  @Test
+  void D_the_text_form_of_a_tenant_leaves_out_what_a_person_wrote() {
+    String text = inactive().toString();
+    assertThat(text).contains(ID, "acme-tours", "INACTIVE").doesNotContain("unpaid", "Acme Tours", "platform-admin");
+  }
 }
