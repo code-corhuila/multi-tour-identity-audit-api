@@ -1,5 +1,6 @@
 package co.edu.corhuila.multi_tour.identity_audit.core.tenant;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -58,10 +59,10 @@ final class InMemoryTenants implements TenantRepository {
   }
 
   @Override
-  public void update(Tenant next, TenantStatus expectedStatus, List<TenantEvent> caused) {
+  public void update(Tenant next, Instant expectedUpdatedAt, List<TenantEvent> caused) {
     anotherRequestArrivesFirst();
     Tenant stored = tenants.get(next.tenantId());
-    if (stored == null || stored.status() != expectedStatus) {
+    if (stored == null || !stored.updatedAt().equals(expectedUpdatedAt)) {
       throw new ConcurrentChangeException(next.tenantId());
     }
     tenants.put(next.tenantId(), next);

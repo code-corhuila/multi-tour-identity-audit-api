@@ -1,5 +1,6 @@
 package co.edu.corhuila.multi_tour.identity_audit.core.tenant;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -25,10 +26,11 @@ public interface TenantRepository {
   void insert(Tenant tenant, RepeatKey key);
 
   /**
-   * Stores the changed tenant and its events together, or neither, only if the stored tenant is still in the
-   * status the change was decided on.
+   * Stores the changed tenant and its events together, or neither, only if the stored tenant was last changed
+   * at {@code expectedUpdatedAt}, the time of the tenant the change was decided on. A status alone would not
+   * see a tenant that changed and came back.
    *
    * @throws ConcurrentChangeException if another request changed it first
    */
-  void update(Tenant next, TenantStatus expectedStatus, List<TenantEvent> events);
+  void update(Tenant next, Instant expectedUpdatedAt, List<TenantEvent> events);
 }

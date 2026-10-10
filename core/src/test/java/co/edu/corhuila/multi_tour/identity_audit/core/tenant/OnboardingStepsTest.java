@@ -63,6 +63,15 @@ class OnboardingStepsTest {
   }
 
   @Test
+  void A_complete_repeated_after_the_tenant_changed_again_still_answers_it_and_leaves_no_event() {
+    var done = complete.execute(completion(pending.tenantId(), TenantStatus.ACTIVE));
+    var inactive = done.inactivate("platform-admin", "unpaid", NOW.plusSeconds(60));
+    tenants.tenants.put(done.tenantId(), inactive);
+    assertThat(complete.execute(completion(pending.tenantId(), TenantStatus.ACTIVE))).isEqualTo(inactive);
+    assertThat(tenants.events).hasSize(1);
+  }
+
+  @Test
   void A_complete_with_other_data_on_a_tenant_that_is_not_pending_is_refused() {
     complete.execute(completion(pending.tenantId(), TenantStatus.ACTIVE));
     assertThatThrownBy(() -> complete.execute(completion(pending.tenantId(), TenantStatus.INACTIVE)))
@@ -75,16 +84,21 @@ class OnboardingStepsTest {
     assertThat(tenants.events).hasSize(1);
   }
 
+  private void refusesAsInvalid(String tenantId, String membership, TenantStatus initial, String actor, String corr) {
+    assertThatThrownBy(() -> complete.execute(new CompleteOnboarding.Command(tenantId, membership, initial, actor, corr)))
+        .isInstanceOf(IllegalArgumentException.class);
+  }
+
   @Test
   void A_complete_checks_its_data_before_it_looks_for_the_tenant() {
-    for (var bad : new CompleteOnboarding.Command[] {
-        new CompleteOnboarding.Command(UNKNOWN, "not-a-uuid", TenantStatus.ACTIVE, "onboard-tenant", "corr-1"),
-        new CompleteOnboarding.Command(UNKNOWN, MEMBERSHIP, TenantStatus.PENDING, "onboard-tenant", "corr-1"),
-        new CompleteOnboarding.Command(UNKNOWN, MEMBERSHIP, TenantStatus.ACTIVE, " ", "corr-1"),
-        new CompleteOnboarding.Command(UNKNOWN, MEMBERSHIP, TenantStatus.ACTIVE, "onboard-tenant", null),
-        new CompleteOnboarding.Command(null, MEMBERSHIP, TenantStatus.ACTIVE, "onboard-tenant", "corr-1")}) {
-      assertThatThrownBy(() -> complete.execute(bad)).isInstanceOf(IllegalArgumentException.class);
-    }
+    refusesAsInvalid(UNKNOWN, "not-a-uuid", TenantStatus.ACTIVE, "onboard-tenant", "corr-1");
+    refusesAsInvalid(UNKNOWN, MEMBERSHIP, TenantStatus.PENDING, "onboard-tenant", "corr-1");
+    refusesAsInvalid(UNKNOWN, MEMBERSHIP, TenantStatus.ACTIVE, " ", "corr-1");
+    refusesAsInvalid(UNKNOWN, MEMBERSHIP, TenantStatus.ACTIVE, "onboard-tenant", null);
+    refusesAsInvalid(null, MEMBERSHIP, TenantStatus.ACTIVE, "onboard-tenant", "corr-1");
+    refusesAsInvalid("not-a-uuid", MEMBERSHIP, TenantStatus.ACTIVE, "onboard-tenant", "corr-1");
+    refusesAsInvalid(UNKNOWN, MEMBERSHIP, TenantStatus.ACTIVE, "a".repeat(101), "corr-1");
+    refusesAsInvalid(UNKNOWN, MEMBERSHIP, TenantStatus.ACTIVE, "onboard-tenant", "c".repeat(129));
     assertThatThrownBy(() -> complete.execute(completion(UNKNOWN, TenantStatus.ACTIVE)))
         .isInstanceOf(TenantNotFoundException.class);
   }
@@ -130,8 +144,9 @@ class OnboardingStepsTest {
 
   @Test
   void A_fail_checks_its_data_before_it_looks_for_the_tenant() {
-    assertThatThrownBy(() -> fail.execute(failure(UNKNOWN, null))).isInstanceOf(IllegalArgumentException.class);
-    assertThatThrownBy(() -> fail.execute(failure(null, FailedStep.APPLY_STATUS)))
+    assertThatThrownBy(() -> fail.execute(new FailOnboarding.Command(UNKNOWN, null)))
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(() -> fail.execute(new FailOnboarding.Command("not-a-uuid", FailedStep.APPLY_STATUS)))
         .isInstanceOf(IllegalArgumentException.class);
     assertThatThrownBy(() -> fail.execute(failure(UNKNOWN, FailedStep.APPLY_STATUS)))
         .isInstanceOf(TenantNotFoundException.class);
