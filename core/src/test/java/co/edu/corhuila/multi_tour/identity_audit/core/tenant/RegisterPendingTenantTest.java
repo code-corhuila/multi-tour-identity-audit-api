@@ -100,4 +100,14 @@ class RegisterPendingTenantTest {
     assertThat(loser.tenant()).isEqualTo(tenants.findByRepeatKey(key("key-0000001")).orElseThrow());
     assertThat(tenants.tenants).hasSize(1);
   }
+
+  @Test
+  void A_register_whose_first_send_won_is_answered_with_it_whichever_conflict_the_repository_finds_first() {
+    var other = new RegisterPendingTenant(tenants, ids, Clock.fixed(NOW, ZoneOffset.UTC));
+    tenants.identifierConflictFirst = true;
+    tenants.beforeNextInsert = () -> other.execute(command("acme-tours", "key-0000001"));
+    var loser = register.execute(command("acme-tours", "key-0000001"));
+    assertThat(loser.created()).isFalse();
+    assertThat(tenants.tenants).hasSize(1);
+  }
 }

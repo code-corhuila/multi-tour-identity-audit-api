@@ -1,6 +1,7 @@
 package co.edu.corhuila.multi_tour.identity_audit.core.tenant;
 
 import java.time.Clock;
+import java.util.Optional;
 
 /** Step 1 of the saga onboard-tenant: the tenant is created pending. */
 public final class RegisterPendingTenant {
@@ -24,6 +25,30 @@ public final class RegisterPendingTenant {
   }
 
   public Result execute(Command command) {
-    throw new UnsupportedOperationException();
+    RepeatKey key = new RepeatKey(OPERATION, command.idempotencyKey());
+    // a repeat answers the first tenant as it is now, without looking at the body (Annex C)
+    Optional<Tenant> first = tenants.findByRepeatKey(key);
+    if (first.isPresent()) {
+      return new Result(first.get(), false);
+    }
+    Tenant tenant =
+        Tenant.registerPending(
+            ids.newId(), command.identifier(), command.commercialName(), command.timeZone(), command.country(),
+            clock.instant());
+    // not redundant with the insert: it refuses the common case without spending the key
+    if (tenants.findByIdentifier(tenant.identifier()).isPresent()) {
+      throw new IdentifierTakenException(tenant.identifier());
+    }
+    try {
+      tenants.insert(tenant, key);
+      return new Result(tenant, true);
+    } catch (RepeatKeyUsedException | IdentifierTakenException lost) {
+      // the request that won may be the first send of this same one: the key decides
+      Optional<Tenant> winner = tenants.findByRepeatKey(key);
+      if (winner.isPresent()) {
+        return new Result(winner.get(), false);
+      }
+      throw lost;
+    }
   }
 }

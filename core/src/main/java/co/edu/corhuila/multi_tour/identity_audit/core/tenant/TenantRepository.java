@@ -13,7 +13,8 @@ public interface TenantRepository {
 
   /**
    * Stores a new tenant and its repeat key together, or neither. When both conflict, the repeat key wins:
-   * the request that lost is a repeat of the one that won, and must be answered with its tenant.
+   * the request that lost is a repeat of the one that won, and must be answered with its tenant. A conflict
+   * leaves the lookups usable and they read committed state, so the loser can find the winner.
    *
    * @throws RepeatKeyUsedException if the key was stored first
    * @throws IdentifierTakenException if a live tenant got the identifier first

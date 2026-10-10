@@ -11,6 +11,8 @@ final class InMemoryTenants implements TenantRepository {
   final Map<RepeatKey, String> keys = new HashMap<>();
   /** Runs just before the next insert: another request that arrives first, with real state behind it. */
   Runnable beforeNextInsert;
+  /** A real adapter may find the identifier conflict before the key one: both orders must be answered. */
+  boolean identifierConflictFirst;
 
   @Override
   public Optional<Tenant> findByIdentifier(String identifier) {
@@ -31,11 +33,13 @@ final class InMemoryTenants implements TenantRepository {
       beforeNextInsert = null;
       winner.run();
     }
-    if (keys.containsKey(key)) {
-      throw new RepeatKeyUsedException(key);
-    }
-    if (findByIdentifier(tenant.identifier()).isPresent()) {
+    boolean keyTaken = keys.containsKey(key);
+    boolean identifierTaken = findByIdentifier(tenant.identifier()).isPresent();
+    if (identifierTaken && (identifierConflictFirst || !keyTaken)) {
       throw new IdentifierTakenException(tenant.identifier());
+    }
+    if (keyTaken) {
+      throw new RepeatKeyUsedException(key);
     }
     tenants.put(tenant.tenantId(), tenant);
     keys.put(key, tenant.tenantId());
