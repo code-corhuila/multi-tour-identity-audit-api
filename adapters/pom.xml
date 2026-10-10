@@ -38,10 +38,9 @@
       <version>10.0.2</version>
     </dependency>
     <dependency>
-      <!-- only for the integration tests against the real engine; the schema is not made here -->
+      <!-- the driver itself, with no mapping layer: documents are written as the validators of the -db expect -->
       <groupId>org.mongodb</groupId>
       <artifactId>mongodb-driver-sync</artifactId>
-      <scope>test</scope>
     </dependency>
   </dependencies>
 </project>
