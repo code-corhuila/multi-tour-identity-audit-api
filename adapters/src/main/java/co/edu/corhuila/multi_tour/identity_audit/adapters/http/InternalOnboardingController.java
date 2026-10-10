@@ -7,9 +7,9 @@ import co.edu.corhuila.multi_tour.identity_audit.core.tenant.FailOnboarding;
 import co.edu.corhuila.multi_tour.identity_audit.core.tenant.FailedStep;
 import co.edu.corhuila.multi_tour.identity_audit.core.tenant.InvalidDataException;
 import co.edu.corhuila.multi_tour.identity_audit.core.tenant.TenantStatus;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestAttribute;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -33,11 +33,11 @@ class InternalOnboardingController {
 
   @PostMapping("/complete-onboarding")
   TenantResponse complete(
-      @PathVariable String tenantId, @RequestAttribute(JwtAuthFilter.CALLER) Caller caller,
+      @PathVariable String tenantId, HttpServletRequest request,
       @RequestBody CompleteRequest body) {
     return TenantResponse.of(complete.execute(new CompleteOnboarding.Command(
         tenantId, body.firstAdministratorMembershipId(), named("initial status", TenantStatus.class, body.initialStatus()),
-        caller.subject(), CorrelationIdFilter.current())));
+        ((Caller) request.getAttribute(JwtAuthFilter.CALLER)).subject(), CorrelationIdFilter.current())));
   }
 
   @PostMapping("/fail-onboarding")
