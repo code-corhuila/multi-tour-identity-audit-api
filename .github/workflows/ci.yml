@@ -24,7 +24,21 @@ jobs:
           distribution: temurin
           java-version: '21'
           cache: maven
+      - name: Prepare the database the integration tests run against
+        # The database is the one multi-tour-identity-audit-db builds (norm 5.2.1). Same versions as the defaults of
+        # the script, from registries without the anonymous limit of Docker Hub (429 Too Many Requests)
+        env:
+          MONGO_IMAGE: public.ecr.aws/docker/library/mongo:8.0.32
+          LIQUIBASE_BASE: ghcr.io/liquibase/liquibase:5.0.4
+          # The commit of multi-tour-identity-audit-db the tests run against; moved on purpose, with the change here that needs it
+          DB_REPO_REF: 44d3468479e5968a13ace1df0dadd7af82c58115
+        run: |
+          url=$(sh scripts/prepare-test-db.sh up)
+          echo "TEST_DATABASE_URL=$url" >> "$GITHUB_ENV"
       - run: mvn -B verify
+      - name: The integration tests ran and none was skipped
+        run: |
+          grep -h "Tests run" adapters/target/surefire-reports/*MongoDatabaseTest.txt | grep -Eq "Tests run: [1-9][0-9]*, Failures: 0, Errors: 0, Skipped: 0"
       - name: Build the image, start it and check what it publishes
         # Same versions as the defaults of the script, from registries without the anonymous limit of
         # Docker Hub, which a shared runner address reaches (429 Too Many Requests)
