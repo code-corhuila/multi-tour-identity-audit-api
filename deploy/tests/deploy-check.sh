@@ -88,6 +88,23 @@ stops_without_the_database() {
   printf '%s' "$out" | grep -q 'MONGODB_URI' || { echo "the message does not name MONGODB_URI"; return 1; }
 }
 
+# The image declares a health check on /health, and a database that does not answer does not make the service unhealthy
+# (it would be restarted for a failure that it cannot fix); /health says so apart
+becomes_healthy() {
+  [ -n "${RUN_ID:-}" ] && docker inspect "$RUN_ID" >/dev/null 2>&1 || { echo "the container of the previous check is not there"; return 1; }
+  status=none
+  for _ in $(seq 1 60); do
+    status=$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$RUN_ID")
+    [ "$status" = healthy ] && break
+    sleep 2
+  done
+  [ "$status" = healthy ] || { echo "the container is '$status', expected healthy"; return 1; }
+  port=$(docker port "$RUN_ID" 8082/tcp | head -n 1 | sed 's/.*://')
+  body=$(curl -s --max-time 5 "http://127.0.0.1:$port/health")
+  printf '%s' "$body" | grep -q '"database":"down"' || { echo "/health did not say that the database is down: $body"; return 1; }
+}
+
+check "I·api_image_becomes_healthy" becomes_healthy
 check "I·api_image_stops_without_a_public_key_and_says_why" stops_without_a_key
 check "I·api_image_stops_without_a_database_address_and_says_why" stops_without_the_database
 
