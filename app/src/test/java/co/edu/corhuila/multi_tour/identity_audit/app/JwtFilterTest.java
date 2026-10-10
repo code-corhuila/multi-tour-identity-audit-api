@@ -97,7 +97,7 @@ class JwtFilterTest extends ShellTest {
   @Test
   void C_the_health_route_and_the_public_profile_need_no_token() {
     assertThat(given().get("/health").statusCode()).isEqualTo(200);
-    assertThat(given().get("/api/v1/identity-audit/public/tenants/acme-tours").statusCode()).isEqualTo(404);
+    assertThat(given().get("/api/v1/identity-audit/public/tenants/never-registered").statusCode()).isEqualTo(404);
   }
 
   @Test
