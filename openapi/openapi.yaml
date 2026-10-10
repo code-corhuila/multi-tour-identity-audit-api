@@ -1,0 +1,46 @@
+openapi: 3.0.3
+info:
+  title: Identity Audit API
+  version: 0.1.0
+  description: |
+    The contract this service is tested against (ADR-004 D7). It grows with each operation, written
+    before the code; the design contract lives in `07-api/contracts/openapi/identity-audit.yaml` of
+    `multi-tour-docs`. Every error uses the single envelope below.
+paths:
+  /health:
+    get:
+      summary: Health check
+      security: []
+      responses:
+        '200':
+          description: The service is up
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status:
+                    type: string
+                    enum: [ok]
+components:
+  schemas:
+    ErrorResponse:
+      type: object
+      required: [error, message, traceId]
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        details:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              message:
+                type: string
+        traceId:
+          type: string
