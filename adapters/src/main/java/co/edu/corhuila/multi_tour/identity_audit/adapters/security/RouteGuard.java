@@ -18,21 +18,20 @@ final class RouteGuard {
 
   private RouteGuard() {}
 
-  /** Whether the path is written in a way that a path could be disguised (stub). */
+  /**
+   * Whether the path is written in a way that hides where it goes: dots, encoded characters, parameters or
+   * doubled slashes. The filter, the interceptors and the controllers do not all read a path the same way, so
+   * such a path is never trusted to decide anything.
+   */
   static boolean isDisguised(String uri) {
-    return false;
+    String path = uri.toLowerCase(Locale.ROOT);
+    return path.contains("..") || path.contains("/.") || path.contains("%") || path.contains(";") || path.contains("//");
   }
 
   static boolean needsToken(String uri) {
     if (uri.equals("/health") || PUBLIC_PROFILE.matcher(uri).matches()) {
       return false;
     }
-    String path = uri.toLowerCase(Locale.ROOT);
-    return path.contains("/api/")
-        || path.contains("..")
-        || path.contains("/.")
-        || path.contains("%")
-        || path.contains(";")
-        || path.contains("//");
+    return isDisguised(uri) || uri.toLowerCase(Locale.ROOT).contains("/api/");
   }
 }
