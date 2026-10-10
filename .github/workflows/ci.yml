@@ -36,7 +36,7 @@ jobs:
       - run: mvn -B verify
       - name: The integration tests ran and none was skipped
         run: |
-          grep -h "Tests run" adapters/target/surefire-reports/*MongoDatabaseTest.txt | grep -q "Skipped: 0"
+          grep -h "Tests run" adapters/target/surefire-reports/*MongoDatabaseTest.txt | grep -Eq "Tests run: [1-9][0-9]*, Failures: 0, Errors: 0, Skipped: 0"
       - name: Build the image, start it and check what it publishes
         # Same versions as the defaults of the script, from registries without the anonymous limit of
         # Docker Hub, which a shared runner address reaches (429 Too Many Requests)
