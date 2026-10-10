@@ -100,6 +100,33 @@ class JwtFilterTest extends ShellTest {
     assertThat(given().get("/api/v1/identity-audit/public/tenants/never-registered").statusCode()).isEqualTo(404);
   }
 
+  private String bearer(com.nimbusds.jwt.JWTClaimsSet.Builder claims) {
+    return "Bearer " + Tokens.valid(claims);
+  }
+
+  @Test
+  void C_a_subject_that_is_blank_padded_too_long_or_with_a_control_character_is_a_401_and_100_characters_pass() {
+    for (String bad : List.of("", " ", " account-1", "account-1 ", "a".repeat(101), "acc\u0007ount", "acc\u202eount", "acc\u2028ount")) {
+      assertRefused(bearer(Tokens.claims(bad, 600, List.of("PLATFORM_ADMINISTRATOR"), null)));
+    }
+    assertThat(call(bearer(Tokens.claims("a".repeat(100), 600, List.of("PLATFORM_ADMINISTRATOR"), null))).statusCode()).isEqualTo(404);
+  }
+
+  @Test
+  void C_a_token_that_is_not_valid_yet_beyond_the_tolerance_is_a_401_and_inside_it_passes() {
+    var admin = List.of("PLATFORM_ADMINISTRATOR");
+    long now = System.currentTimeMillis();
+    assertRefused(bearer(Tokens.claims("account-1", 600, admin, null).notBeforeTime(new java.util.Date(now + 120_000))));
+    assertThat(call(bearer(Tokens.claims("account-1", 600, admin, null).notBeforeTime(new java.util.Date(now + 10_000)))).statusCode()).isEqualTo(404);
+    assertThat(call(bearer(Tokens.claims("account-1", 600, admin, null).notBeforeTime(new java.util.Date(now - 60_000)))).statusCode()).isEqualTo(404);
+  }
+
+  @Test
+  void C_without_an_issuer_or_audience_configured_those_claims_are_not_read() {
+    var claims = Tokens.claims("account-1", 600, List.of("PLATFORM_ADMINISTRATOR"), null).issuer("anyone").audience("anywhere");
+    assertThat(call(bearer(claims)).statusCode()).isEqualTo(404);
+  }
+
   @Test
   void C_the_service_does_not_start_without_a_public_key() {
     assertThatThrownBy(() -> start(Map.of()))
