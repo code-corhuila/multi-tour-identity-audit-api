@@ -148,6 +148,22 @@ class JwtFilterTest extends ShellTest {
   }
 
   @Test
+  void C_roles_that_are_mixed_a_role_in_lower_case_or_an_access_mark_the_service_does_not_know_are_a_401() {
+    String tenant = "00000000-0000-4000-8000-0000000000aa";
+    assertRefused("Bearer " + Tokens.valid(Tokens.claims("account-1", 600, List.of("PLATFORM_ADMINISTRATOR", "TENANT_ADMINISTRATOR"), null)));
+    assertRefused("Bearer " + Tokens.valid(Tokens.claims("account-1", 600, List.of("SERVICE", "MANAGER"), null)));
+    assertRefused("Bearer " + Tokens.valid(Tokens.claims("account-1", 600, List.of("tenant_administrator"), tenant)));
+    assertRefused("Bearer " + Tokens.valid(Tokens.claims("account-1", 600, List.of("PLATFORM_ADMINISTRATOR"), null).claim("access", "Password-Change")));
+    assertRefused("Bearer " + Tokens.valid(Tokens.claims("account-1", 600, List.of("PLATFORM_ADMINISTRATOR"), null).claim("access", 7)));
+  }
+
+  @Test
+  void C_the_restricted_access_of_a_tenant_administrator_is_still_a_403_on_every_route_here() {
+    String token = Tokens.valid(Tokens.claims("account-1", 600, List.of("TENANT_ADMINISTRATOR"), "00000000-0000-4000-8000-0000000000aa").claim("access", "restricted"));
+    assertThat(given().header("Authorization", "Bearer " + token).get("/api/v1/identity-audit/tenants").statusCode()).isEqualTo(403);
+  }
+
+  @Test
   void C_the_service_does_not_start_without_a_public_key() {
     assertThatThrownBy(() -> start(Map.of()))
         .hasStackTraceContaining("JWT_PUBLIC_KEY");

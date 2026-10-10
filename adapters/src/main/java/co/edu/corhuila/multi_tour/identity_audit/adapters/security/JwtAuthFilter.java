@@ -113,6 +113,12 @@ public class JwtAuthFilter extends OncePerRequestFilter {
           || subject.codePoints().anyMatch(JwtAuthFilter::disguises)) {
         return null;
       }
+      // only the marks this service understands pass: `restricted` (it still opens nothing here) and none. The token of a
+      // temporary credential (`password-change`) only serves the route that chooses a password, in the security service
+      String access = claims.getStringClaim("access");
+      if (access != null && !"restricted".equals(access)) {
+        return null;
+      }
       List<String> names = claims.getStringListClaim("roles");
       Set<Role> roles = EnumSet.noneOf(Role.class);
       for (String name : names == null ? List.<String>of() : names) {
