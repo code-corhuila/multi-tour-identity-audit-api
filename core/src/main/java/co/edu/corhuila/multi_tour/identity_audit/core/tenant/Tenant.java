@@ -153,7 +153,7 @@ public record Tenant(
   }
 
   /** A text that is not blank, has no control character and is not longer than the limit; it is trimmed. */
-  private static String text(String value, int max, String what) {
+  static String text(String value, int max, String what) {
     require(value != null && !value.isBlank(), what + " is required");
     String trimmed = value.strip();
     require(trimmed.length() <= max, what + " is at most " + max + " characters");
