@@ -22,7 +22,16 @@ class BodyLimitTest extends ShellTest {
     return (head + "a".repeat(bytes - head.length() - tail.length()) + tail).getBytes(StandardCharsets.UTF_8);
   }
 
-  private static Response post(Object body) {
+  private static Response post(byte[] body) {
+    return given().contentType(ContentType.JSON).body(body).post(ECHO);
+  }
+
+  private static Response post(String body) {
+    return given().contentType(ContentType.JSON).body(body).post(ECHO);
+  }
+
+  /** No length is declared: the client sends the stream in chunks. */
+  private static Response post(java.io.InputStream body) {
     return given().contentType(ContentType.JSON).body(body).post(ECHO);
   }
 
