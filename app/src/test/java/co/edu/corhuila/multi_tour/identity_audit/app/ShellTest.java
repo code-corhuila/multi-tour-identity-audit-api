@@ -17,6 +17,11 @@ abstract class ShellTest {
   @DynamicPropertySource
   static void publicKey(DynamicPropertyRegistry registry) {
     registry.add("JWT_PUBLIC_KEY", Tokens::publicKeyPem);
+    // the real database where the CI has made it; otherwise an address nobody connects to (the driver is lazy)
+    registry.add("MONGODB_URI", () -> {
+      String real = System.getenv("TEST_DATABASE_URL");
+      return real != null && !real.isBlank() ? real : "mongodb://localhost:27017/identity_audit";
+    });
   }
 
   @BeforeEach
