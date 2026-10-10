@@ -46,4 +46,4 @@ Full policy: `00-governance/branching-policy.md` in `multi-tour-docs`.
 
 ## Coverage
 
-`mvn -B verify` measures the lines covered by the tests of each module (JaCoCo) and fails under its floor: `core` 0.97, `adapters` 0.42 (its HTTP part is covered by the tests of `app`, which the report of `adapters` does not add up) and `app` 0.93. The floors are measured with the database of the CI (`TEST_DATABASE_URL`); to run `mvn verify` without one, add `-Dcoverage.halt=false`. A lower floor needs a reason in the pull request.
+`mvn -B verify` measures the lines covered by the tests of each module (JaCoCo) and fails under its floor: `core` 0.97, `adapters` 0.36 (its HTTP part is covered by the tests of `app`, which the report of `adapters` does not add up) and `app` 0.93. The floors are measured with the database of the CI (`TEST_DATABASE_URL`); to run `mvn verify` without one, add `-Dcoverage.halt=false`. A lower floor needs a reason in the pull request.
