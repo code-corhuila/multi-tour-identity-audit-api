@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Identity Audit API
-  version: 0.8.0
+  version: 0.9.0
   description: |
     The contract this service is tested against (ADR-004 D7). It grows with each operation, written before the
     code; the design contract lives in `07-api/contracts/openapi/identity-audit.yaml` of `multi-tour-docs`.
@@ -63,6 +63,8 @@ paths:
           $ref: '#/components/responses/Error'
         '403':
           $ref: '#/components/responses/Error'
+        '413':
+          $ref: '#/components/responses/Error'
         '415':
           $ref: '#/components/responses/Error'
         '422':
@@ -103,6 +105,8 @@ paths:
           $ref: '#/components/responses/Error'
         '404':
           $ref: '#/components/responses/Error'
+        '413':
+          $ref: '#/components/responses/Error'
         '415':
           $ref: '#/components/responses/Error'
         '422':
@@ -142,6 +146,8 @@ paths:
         '403':
           $ref: '#/components/responses/Error'
         '404':
+          $ref: '#/components/responses/Error'
+        '413':
           $ref: '#/components/responses/Error'
         '415':
           $ref: '#/components/responses/Error'
@@ -241,6 +247,8 @@ paths:
           $ref: '#/components/responses/Error'
         '404':
           $ref: '#/components/responses/Error'
+        '413':
+          $ref: '#/components/responses/Error'
         '415':
           $ref: '#/components/responses/Error'
         '422':
@@ -280,6 +288,8 @@ paths:
         '403':
           $ref: '#/components/responses/Error'
         '404':
+          $ref: '#/components/responses/Error'
+        '413':
           $ref: '#/components/responses/Error'
         '415':
           $ref: '#/components/responses/Error'
@@ -377,6 +387,8 @@ paths:
           $ref: '#/components/responses/Error'
         '404':
           $ref: '#/components/responses/Error'
+        '413':
+          $ref: '#/components/responses/Error'
         '500':
           $ref: '#/components/responses/Error'
   /api/v1/identity-audit/internal/outbox/{eventId}/attempts:
@@ -408,6 +420,8 @@ paths:
         '403':
           $ref: '#/components/responses/Error'
         '404':
+          $ref: '#/components/responses/Error'
+        '413':
           $ref: '#/components/responses/Error'
         '415':
           $ref: '#/components/responses/Error'
