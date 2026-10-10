@@ -86,6 +86,7 @@ class MongoOutboxRoutesTest extends ShellTest {
       assertRefused(service().filter(Contract.answers()).get(OUTBOX + bad), 400, "VALIDATION_ERROR");
     }
     assertThat(pending("?limit=100").statusCode()).isEqualTo(200);
+    assertThat(pending("?page=999999999&limit=100").jsonPath().getList("data")).isEmpty();
   }
 
   @Test
@@ -118,6 +119,7 @@ class MongoOutboxRoutesTest extends ShellTest {
     assertRefused(given().header("Authorization", "Bearer " + person).filter(Contract.answers()).get(OUTBOX), 403, "FORBIDDEN");
     assertRefused(given().header("Authorization", "Bearer " + person).filter(Contract.answers())
         .post(OUTBOX + "/" + id + "/published"), 403, "FORBIDDEN");
+    assertRefused(service().filter(Contract.answers()).get("/api/v1/identity-audit/internal//outbox"), 403, "FORBIDDEN");
     assertThat(pending("").jsonPath().getList("data")).hasSize(1);
   }
 }

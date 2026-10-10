@@ -5,6 +5,7 @@ import co.edu.corhuila.multi_tour.identity_audit.core.tenant.ConcurrentChangeExc
 import co.edu.corhuila.multi_tour.identity_audit.core.tenant.IdentifierTakenException;
 import co.edu.corhuila.multi_tour.identity_audit.core.tenant.InvalidDataException;
 import co.edu.corhuila.multi_tour.identity_audit.core.tenant.InvalidStatusTransitionException;
+import co.edu.corhuila.multi_tour.identity_audit.core.outbox.OutboxEventNotFoundException;
 import co.edu.corhuila.multi_tour.identity_audit.core.tenant.TenantNotFoundException;
 import java.util.List;
 import org.slf4j.Logger;
@@ -54,6 +55,11 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
 
   @ExceptionHandler(TenantNotFoundException.class)
   ResponseEntity<Object> notFound(TenantNotFoundException e) {
+    return answer(HttpStatus.NOT_FOUND, "NOT_FOUND", e.getMessage(), null);
+  }
+
+  @ExceptionHandler(OutboxEventNotFoundException.class)
+  ResponseEntity<Object> eventNotFound(OutboxEventNotFoundException e) {
     return answer(HttpStatus.NOT_FOUND, "NOT_FOUND", e.getMessage(), null);
   }
 
