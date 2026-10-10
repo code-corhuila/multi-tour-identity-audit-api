@@ -42,7 +42,7 @@ public final class MongoOutboxRepository implements OutboxRepository {
   @Override
   public Page<OutboxEvent> due(Instant now, int page, int limit) {
     Bson filter = and(eq("status", "PENDING"), lte("nextAttemptAt", Date.from(now)));
-    // the order of idx_outbox_events_pending (status, nextAttemptAt, occurredAt), so that the sort reads the index
+    // the order of idx_outbox_events_due (status, nextAttemptAt, occurredAt, _id), so that the sort reads the index
     long total = events().countDocuments(filter, ReadLimit.count());
     long offset = (long) (page - 1) * limit;
     List<OutboxEvent> data = offset > Integer.MAX_VALUE
