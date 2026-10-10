@@ -79,7 +79,7 @@ class MongoReadLimitTest {
     var reads = byName();
     assertThat(reads.keySet()).contains("find", "aggregate");
     for (String name : List.of("find", "aggregate")) {
-      assertThat(reads.get(name)).as(name).isNotEmpty().allSatisfy(c -> assertThat(c.getNumber("maxTimeMS").intValue()).isEqualTo(5000));
+      assertThat(reads.get(name)).as(name).isNotEmpty().allSatisfy(c -> assertThat(c.containsKey("maxTimeMS") ? c.getNumber("maxTimeMS").intValue() : -1).isEqualTo(5000));
     }
   }
 
@@ -90,6 +90,6 @@ class MongoReadLimitTest {
     tenants.insert(tenant, new RepeatKey("registerPendingTenant", "key-0000001"));
     var writes = byName();
     assertThat(writes.get("insert")).isNotEmpty().allSatisfy(c -> assertThat(c.containsKey("maxTimeMS")).isFalse());
-    assertThat(writes.getOrDefault("commitTransaction", List.of())).allSatisfy(c -> assertThat(c.containsKey("maxTimeMS")).isFalse());
+    assertThat(writes.get("commitTransaction")).isNotEmpty().allSatisfy(c -> assertThat(c.containsKey("maxTimeMS")).isFalse());
   }
 }
