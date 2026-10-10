@@ -10,6 +10,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -80,6 +81,19 @@ class JwtFilterTest extends ShellTest {
   }
 
   @Test
+  void C_a_signed_token_with_odd_roles_or_subject_is_a_401_and_never_a_server_error() {
+    assertRefused("Bearer " + Tokens.valid(Tokens.admin().claim("roles", Arrays.asList((String) null))));
+    assertRefused("Bearer " + Tokens.valid(Tokens.admin().claim("roles", Arrays.asList("SERVICE", null))));
+    assertRefused("Bearer " + Tokens.valid(Tokens.admin().claim("roles", "PLATFORM_ADMINISTRATOR")));
+    assertRefused("Bearer " + Tokens.valid(Tokens.admin().subject("  ")));
+  }
+
+  @Test
+  void C_the_scheme_is_not_case_sensitive() {
+    assertThat(call("bearer " + Tokens.valid(Tokens.admin())).statusCode()).isEqualTo(404);
+  }
+
+  @Test
   void C_the_health_route_and_the_public_profile_need_no_token() {
     assertThat(given().get("/health").statusCode()).isEqualTo(200);
     assertThat(given().get("/api/v1/identity-audit/public/tenants/acme-tours").statusCode()).isEqualTo(404);
@@ -99,6 +113,21 @@ class JwtFilterTest extends ShellTest {
       try (ConfigurableApplicationContext context = start(Map.of("JWT_PUBLIC_KEY_FILE", file.toString()))) {
         assertThat(context.isRunning()).isTrue();
       }
+    } finally {
+      Files.deleteIfExists(file);
+    }
+  }
+
+  @Test
+  void C_the_service_does_not_start_with_a_key_shorter_than_2048_bits() throws Exception {
+    java.security.KeyPairGenerator generator = java.security.KeyPairGenerator.getInstance("RSA");
+    generator.initialize(1024);
+    String body = java.util.Base64.getEncoder().encodeToString(generator.generateKeyPair().getPublic().getEncoded());
+    String pem = "-----BEGIN PUBLIC KEY-----\n" + body + "\n-----END PUBLIC KEY-----\n";
+    Path file = Files.createTempFile("short", ".pem");
+    try {
+      Files.writeString(file, pem);
+      assertThatThrownBy(() -> start(Map.of("JWT_PUBLIC_KEY_FILE", file.toString()))).hasStackTraceContaining("2048");
     } finally {
       Files.deleteIfExists(file);
     }
