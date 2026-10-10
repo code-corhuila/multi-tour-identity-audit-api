@@ -19,6 +19,9 @@
 
   <properties>
     <java.version>21</java.version>
+    <!-- the share of lines that the tests of a module must cover; a module may set its own, never below what it has -->
+    <coverage.floor>0.99</coverage.floor>
+    <coverage.halt>false</coverage.halt>
   </properties>
 
   <modules>
@@ -26,4 +29,45 @@
     <module>adapters</module>
     <module>app</module>
   </modules>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.jacoco</groupId>
+        <artifactId>jacoco-maven-plugin</artifactId>
+        <version>0.8.13</version>
+        <executions>
+          <execution>
+            <id>agent</id>
+            <goals><goal>prepare-agent</goal></goals>
+          </execution>
+          <execution>
+            <id>report</id>
+            <phase>verify</phase>
+            <goals><goal>report</goal></goals>
+          </execution>
+          <execution>
+            <id>floor</id>
+            <phase>verify</phase>
+            <goals><goal>check</goal></goals>
+            <configuration>
+              <haltOnFailure>${coverage.halt}</haltOnFailure>
+              <rules>
+                <rule>
+                  <element>BUNDLE</element>
+                  <limits>
+                    <limit>
+                      <counter>LINE</counter>
+                      <value>COVEREDRATIO</value>
+                      <minimum>${coverage.floor}</minimum>
+                    </limit>
+                  </limits>
+                </rule>
+              </rules>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
 </project>
