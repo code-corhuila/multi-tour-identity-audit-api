@@ -18,6 +18,11 @@ final class RouteGuard {
 
   private RouteGuard() {}
 
+  /** Whether the path is written in a way that a path could be disguised (stub). */
+  static boolean isDisguised(String uri) {
+    return false;
+  }
+
   static boolean needsToken(String uri) {
     if (uri.equals("/health") || PUBLIC_PROFILE.matcher(uri).matches()) {
       return false;

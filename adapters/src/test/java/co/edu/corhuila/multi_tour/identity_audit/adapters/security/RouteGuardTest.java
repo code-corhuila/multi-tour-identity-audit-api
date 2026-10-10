@@ -40,4 +40,15 @@ class RouteGuardTest {
     assertThat(RouteGuard.needsToken("/nowhere")).isFalse();
     assertThat(RouteGuard.needsToken("/probe/echo")).isFalse();
   }
+
+  @Test
+  void C_a_path_written_in_a_disguised_way_is_told_apart_from_a_plain_one() {
+    for (String disguised : new String[] {"/a;b", "/a/%69", "/a//b", "/a/./b", "/a/../b", "/A/%2E%2e/b"}) {
+      assertThat(RouteGuard.isDisguised(disguised)).as(disguised).isTrue();
+    }
+    for (String plain : new String[] {"/health", "/api/v1/identity-audit/internal/tenants",
+        "/api/v1/identity-audit/tenants/00000000-0000-4000-8000-000000000001"}) {
+      assertThat(RouteGuard.isDisguised(plain)).as(plain).isFalse();
+    }
+  }
 }
