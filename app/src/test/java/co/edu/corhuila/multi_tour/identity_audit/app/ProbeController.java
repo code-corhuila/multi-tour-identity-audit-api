@@ -1,5 +1,6 @@
 package co.edu.corhuila.multi_tour.identity_audit.app;
 
+import co.edu.corhuila.multi_tour.identity_audit.adapters.security.ForbiddenException;
 import co.edu.corhuila.multi_tour.identity_audit.core.tenant.ConcurrentChangeException;
 import co.edu.corhuila.multi_tour.identity_audit.core.tenant.IdentifierTakenException;
 import co.edu.corhuila.multi_tour.identity_audit.core.tenant.InvalidDataException;
@@ -42,6 +43,7 @@ class ProbeController {
       case "identifier-taken" -> throw new IdentifierTakenException("acme-tours");
       case "invalid-transition" -> throw new InvalidStatusTransitionException(TenantStatus.ACTIVE, "be reactivated");
       case "concurrent" -> throw new ConcurrentChangeException("00000000-0000-4000-8000-000000000001");
+      case "forbidden" -> throw new ForbiddenException();
       case "plain-illegal-argument" -> throw new IllegalArgumentException("mongodb://user:secret@host from a library");
       default -> throw new IllegalStateException(kind);
     }
