@@ -1,7 +1,7 @@
 package co.edu.corhuila.multi_tour.identity_audit.app;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
 import co.edu.corhuila.multi_tour.identity_audit.core.tenant.CompleteOnboarding;
 import co.edu.corhuila.multi_tour.identity_audit.core.tenant.ConsultTenant;
@@ -14,6 +14,8 @@ import co.edu.corhuila.multi_tour.identity_audit.core.tenant.RegisterPendingTena
 import co.edu.corhuila.multi_tour.identity_audit.core.tenant.TenantRepository;
 import co.edu.corhuila.multi_tour.identity_audit.core.tenant.TenantStatus;
 import com.mongodb.MongoClientSettings;
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -43,14 +45,31 @@ class MongoCompositionRootTest extends ShellTest {
     assertThat(settings.getConnectionPoolSettings().getMaxSize()).isEqualTo(10);
     assertThat(settings.getConnectionPoolSettings().getMaxWaitTime(TimeUnit.MILLISECONDS)).isEqualTo(5_000);
     assertThat(settings.getSocketSettings().getReadTimeout(TimeUnit.MILLISECONDS)).isEqualTo(5_000);
+    // with the database down a request waits 5 s at most, not the 30 s and 10 s that the driver would wait
+    assertThat(settings.getSocketSettings().getConnectTimeout(TimeUnit.MILLISECONDS)).isEqualTo(5_000);
+    assertThat(settings.getClusterSettings().getServerSelectionTimeout(TimeUnit.MILLISECONDS)).isEqualTo(5_000);
+  }
+
+  private Throwable startWith(String uri) {
+    List<String> args = new ArrayList<>(List.of("--server.port=0", "--MONGODB_URI=" + uri,
+        "--JWT_PUBLIC_KEY=" + Tokens.publicKeyPem()));
+    return catchThrowable(() -> SpringApplication.run(IdentityAuditApplication.class, args.toArray(String[]::new)));
   }
 
   @Test
-  void C_the_service_does_not_start_without_the_address_of_the_database() {
-    List<String> args = new ArrayList<>(List.of("--server.port=0", "--MONGODB_URI=",
-        "--JWT_PUBLIC_KEY=" + Tokens.publicKeyPem()));
-    assertThatThrownBy(() -> SpringApplication.run(IdentityAuditApplication.class, args.toArray(String[]::new)))
-        .hasStackTraceContaining("MONGODB_URI");
+  void C_the_service_does_not_start_without_the_address_of_the_database_or_without_its_name() {
+    assertThat(startWith("")).rootCause().isInstanceOf(IllegalStateException.class).hasMessageContaining("MONGODB_URI");
+    assertThat(startWith("mongodb://localhost:27017")).rootCause().isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("name the database");
+  }
+
+  @Test
+  void C_a_malformed_address_stops_the_service_without_writing_the_password_anywhere() {
+    Throwable failure = startWith("mongodb://identity_audit_app:s3cretPass@host:notaport/identity_audit");
+    assertThat(failure).isNotNull();
+    StringWriter trace = new StringWriter();
+    failure.printStackTrace(new PrintWriter(trace));
+    assertThat(trace.toString()).contains("MONGODB_URI").doesNotContain("s3cretPass");
   }
 
   @Test
