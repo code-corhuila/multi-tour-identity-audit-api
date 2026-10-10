@@ -1,7 +1,9 @@
 package co.edu.corhuila.multi_tour.identity_audit.app;
 
+import co.edu.corhuila.multi_tour.identity_audit.adapters.persistence.MongoDatabaseHealth;
 import co.edu.corhuila.multi_tour.identity_audit.adapters.persistence.MongoOutboxRepository;
 import co.edu.corhuila.multi_tour.identity_audit.adapters.persistence.MongoTenantRepository;
+import co.edu.corhuila.multi_tour.identity_audit.core.health.DatabaseHealth;
 import co.edu.corhuila.multi_tour.identity_audit.core.outbox.ListDueEvents;
 import co.edu.corhuila.multi_tour.identity_audit.core.outbox.MarkEventPublished;
 import co.edu.corhuila.multi_tour.identity_audit.core.outbox.OutboxRepository;
@@ -159,5 +161,10 @@ class CompositionRoot {
   @Bean
   RecordFailedAttempt recordFailedAttempt(OutboxRepository outbox, Clock clock, RetryPolicy policy) {
     return new RecordFailedAttempt(outbox, clock, policy);
+  }
+
+  @Bean
+  DatabaseHealth databaseHealth(MongoClient client, ConnectionString connection) {
+    return new MongoDatabaseHealth(client, connection.getDatabase());
   }
 }

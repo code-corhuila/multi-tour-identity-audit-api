@@ -46,4 +46,24 @@ class MongoDatabaseHealthTest {
       assertThat(Duration.ofNanos(System.nanoTime() - started)).isLessThan(Duration.ofSeconds(4));
     }
   }
+
+  @Test
+  void I_many_callers_at_once_with_the_database_down_do_not_all_wait_for_the_ping() throws Exception {
+    ConnectionString url = new ConnectionString("mongodb://user:secret@localhost:1/identity_audit");
+    try (MongoClient client = MongoClients.create(url)) {
+      var health = new MongoDatabaseHealth(client, url.getDatabase());
+      var pool = java.util.concurrent.Executors.newFixedThreadPool(8);
+      long started = System.nanoTime();
+      var answers = new java.util.ArrayList<java.util.concurrent.Future<Boolean>>();
+      for (int i = 0; i < 8; i++) {
+        answers.add(pool.submit(health::isUp));
+      }
+      for (var answer : answers) {
+        assertThat(answer.get()).isFalse();
+      }
+      pool.shutdownNow();
+      // one pings for 2 s and the rest answer at once: the sum of eight waits would be 16 s
+      assertThat(Duration.ofNanos(System.nanoTime() - started)).isLessThan(Duration.ofSeconds(5));
+    }
+  }
 }

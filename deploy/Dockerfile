@@ -20,4 +20,7 @@ FROM ${JRE_IMAGE}
 COPY --from=build /src/app/target/identity-audit.jar /app.jar
 USER 10001
 EXPOSE 8082
+# Healthy when /health answers 200: the service is alive. Only what the image has (bash, head, grep) is used, no wget or
+# curl; a database that is down does not make the container unhealthy, /health says so apart.
+HEALTHCHECK --interval=10s --timeout=3s --start-period=40s --retries=3 CMD bash -c 'exec 3<>/dev/tcp/127.0.0.1/${PORT:-8082}; printf "GET /health HTTP/1.0\r\nHost: localhost\r\n\r\n" >&3; head -n 1 <&3 | grep -q " 200"'
 ENTRYPOINT ["java", "-jar", "/app.jar"]
