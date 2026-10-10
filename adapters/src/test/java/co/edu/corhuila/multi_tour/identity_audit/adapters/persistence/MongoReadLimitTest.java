@@ -60,7 +60,8 @@ class MongoReadLimitTest {
   /** The commands of the repositories on the collections of the domain, by name. */
   private Map<String, List<BsonDocument>> byName() {
     return sent.stream()
-        .filter(e -> e.getDatabaseName().equals(url.getDatabase()))
+        // the commit of a transaction goes to the admin database
+        .filter(e -> e.getDatabaseName().equals(url.getDatabase()) || e.getCommandName().equals("commitTransaction"))
         .collect(java.util.stream.Collectors.groupingBy(CommandStartedEvent::getCommandName,
             java.util.stream.Collectors.mapping(CommandStartedEvent::getCommand, java.util.stream.Collectors.toList())));
   }
