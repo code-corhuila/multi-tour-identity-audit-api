@@ -12,7 +12,7 @@ public record TenantEvent(
 
   public TenantEvent {
     if (eventId == null || type == null || tenant == null || occurredAt == null) {
-      throw new IllegalArgumentException("An event has an id, a type, a tenant and a time");
+      throw new InvalidDataException("An event has an id, a type, a tenant and a time");
     }
     requireWho(actor, correlationId);
   }
@@ -24,11 +24,11 @@ public record TenantEvent(
   static void requireWho(String actor, String correlationId) {
     if (actor == null || actor.isBlank() || actor.length() > 100 || !actor.equals(actor.strip())
         || actor.chars().anyMatch(Character::isISOControl)) {
-      throw new IllegalArgumentException("An event has an actor, trimmed, of at most 100 characters");
+      throw new InvalidDataException("An event has an actor, trimmed, of at most 100 characters");
     }
     if (correlationId == null || correlationId.isEmpty() || correlationId.length() > 128
         || correlationId.chars().anyMatch(c -> Character.isWhitespace(c) || Character.isISOControl(c))) {
-      throw new IllegalArgumentException("An event has a correlation id of at most 128 characters without spaces");
+      throw new InvalidDataException("An event has a correlation id of at most 128 characters without spaces");
     }
   }
 

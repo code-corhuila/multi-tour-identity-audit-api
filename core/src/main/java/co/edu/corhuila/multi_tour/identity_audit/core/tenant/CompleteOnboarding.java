@@ -18,7 +18,7 @@ public final class CompleteOnboarding {
       Tenant.requireUuid(firstAdministratorMembershipId, "The first Administrator");
       TenantEvent.requireWho(actor, correlationId);
       if (initialStatus != TenantStatus.ACTIVE && initialStatus != TenantStatus.INACTIVE) {
-        throw new IllegalArgumentException("The initial status is active or inactive");
+        throw new InvalidDataException("The initial status is active or inactive");
       }
     }
   }

@@ -5,10 +5,10 @@ public record RepeatKey(String operation, String key) {
 
   public RepeatKey {
     if (operation == null || operation.isBlank()) {
-      throw new IllegalArgumentException("The operation of a repeat key is required");
+      throw new InvalidDataException("The operation of a repeat key is required");
     }
     if (key == null || key.length() < 8 || key.length() > 128 || key.chars().anyMatch(Character::isWhitespace)) {
-      throw new IllegalArgumentException("The Idempotency-Key is 8 to 128 characters without spaces");
+      throw new InvalidDataException("The Idempotency-Key is 8 to 128 characters without spaces");
     }
   }
 }
