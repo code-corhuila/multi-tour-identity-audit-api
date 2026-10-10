@@ -67,6 +67,7 @@ class MongoPublicProfileRouteTest extends ShellTest {
     assertThat(response.jsonPath().getMap("$").keySet()).containsExactlyInAnyOrder("identifier", "commercialName", "tenantStatus");
     assertThat(response.jsonPath().getString("commercialName")).isEqualTo("Tours acme-tours");
     assertThat(response.jsonPath().getString("tenantStatus")).isEqualTo("ACTIVE");
+    assertThat(response.header("Cache-Control")).isEqualTo("no-store");
   }
 
   @Test
@@ -80,21 +81,22 @@ class MongoPublicProfileRouteTest extends ShellTest {
     pending("pending-tours");
     String failed = pending("failed-tours");
     service().body(Map.of("failedStep", "CREATE_ACCOUNT")).post(INTERNAL + "/" + failed + "/fail-onboarding");
-    String first = null;
+    Map<String, Object> first = null;
     for (String identifier : List.of("pending-tours", "failed-tours", "unknown-tours")) {
       Response response = refusedProfile(identifier);
       assertThat(response.statusCode()).isEqualTo(404);
       assertThat(response.jsonPath().getString("error")).isEqualTo("NOT_FOUND");
-      String message = response.jsonPath().getString("message");
-      assertThat(first == null ? message : first).isEqualTo(message);
-      first = message;
+      Map<String, Object> body = new java.util.HashMap<>(response.jsonPath().getMap("$"));
+      body.remove("traceId");
+      assertThat(first == null ? body : first).isEqualTo(body);
+      first = body;
     }
   }
 
   @Test
   void C_a_path_that_is_not_written_like_an_identifier_never_reaches_the_profile() {
     complete("acme-tours", "ACTIVE");
-    for (String bad : List.of("ACME-TOURS", "acme_tours", "acme%2Dtours", "a".repeat(41), "acme-tours;x=1")) {
+    for (String bad : List.of("ACME-TOURS", "acme_tours", "acme%2Dtours", "a".repeat(41), "acme-tours;x=1", "acme-tours/")) {
       assertThat(given().filter(Contract.answers()).get(PROFILE + bad).statusCode()).as(bad).isEqualTo(401);
     }
     Response short2 = refusedProfile("ab");
@@ -107,5 +109,10 @@ class MongoPublicProfileRouteTest extends ShellTest {
     Response response = given().header("Authorization", "Bearer " + Tokens.valid(Tokens.admin()))
         .filter(Contract.filter()).get(PROFILE + "acme-tours");
     assertThat(response.statusCode()).isEqualTo(200);
+    String expired = Tokens.valid(Tokens.claims("account-1", -600, List.of("PLATFORM_ADMINISTRATOR"), null));
+    for (String bearer : List.of("garbage", expired)) {
+      Response ignored = given().header("Authorization", "Bearer " + bearer).get(PROFILE + "acme-tours");
+      assertThat(ignored.statusCode()).as(bearer).isEqualTo(200);
+    }
   }
 }
