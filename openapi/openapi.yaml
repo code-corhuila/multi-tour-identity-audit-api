@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Identity Audit API
-  version: 0.4.0
+  version: 0.5.0
   description: |
     The contract this service is tested against (ADR-004 D7). It grows with each operation, written before the
     code; the design contract lives in `07-api/contracts/openapi/identity-audit.yaml` of `multi-tour-docs`.
@@ -211,6 +211,86 @@ paths:
           $ref: '#/components/responses/Error'
         '500':
           $ref: '#/components/responses/Error'
+  /api/v1/identity-audit/tenants/{tenantId}/inactivate:
+    post:
+      summary: Inactivate an active tenant, with a reason
+      description: The reason is required. A tenant that is not active, a repeat included, is `422 INVALID_STATUS_TRANSITION`. Writes `TenantInactivated` to the outbox in the same transaction. Role `PLATFORM_ADMINISTRATOR`.
+      operationId: inactivateTenant
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/TenantIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransitionReasonRequest'
+      responses:
+        '200':
+          description: Tenant inactivated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantResponse'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '415':
+          $ref: '#/components/responses/Error'
+        '422':
+          description: The tenant is not active (`INVALID_STATUS_TRANSITION`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/Error'
+  /api/v1/identity-audit/tenants/{tenantId}/reactivate:
+    post:
+      summary: Reactivate an inactive tenant, with a reason
+      description: The reason is required. A tenant that is not inactive, a repeat included, is `422 INVALID_STATUS_TRANSITION`. Writes `TenantReactivated` to the outbox in the same transaction. Role `PLATFORM_ADMINISTRATOR`.
+      operationId: reactivateTenant
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/TenantIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransitionReasonRequest'
+      responses:
+        '200':
+          description: Tenant reactivated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantResponse'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '415':
+          $ref: '#/components/responses/Error'
+        '422':
+          description: The tenant is not inactive (`INVALID_STATUS_TRANSITION`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/Error'
 components:
   securitySchemes:
     bearerAuth:
@@ -316,6 +396,15 @@ components:
             limit: {type: integer, minimum: 1, maximum: 100}
             total: {type: integer, minimum: 0}
             totalPages: {type: integer, minimum: 0}
+    TransitionReasonRequest:
+      type: object
+      required: [reason]
+      additionalProperties: false
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
     TenantResponse:
       type: object
       required: [tenantId, identifier, commercialName, tenantStatus, timeZone, country, createdAt]
