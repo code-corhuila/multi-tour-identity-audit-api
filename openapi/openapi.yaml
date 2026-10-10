@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Identity Audit API
-  version: 0.7.0
+  version: 0.8.0
   description: |
     The contract this service is tested against (ADR-004 D7). It grows with each operation, written before the
     code; the design contract lives in `07-api/contracts/openapi/identity-audit.yaml` of `multi-tour-docs`.
@@ -379,6 +379,40 @@ paths:
           $ref: '#/components/responses/Error'
         '500':
           $ref: '#/components/responses/Error'
+  /api/v1/identity-audit/internal/outbox/{eventId}/attempts:
+    post:
+      summary: Record a failed delivery
+      description: Counts the attempt, keeps the error and moves `nextAttemptAt` (the wait doubles from 5 s up to 15 min); the 20th attempt marks the event `FAILED`. An event that is no longer pending is answered as it is. Role `SERVICE`.
+      operationId: recordOutboxEventAttempt
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/EventIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OutboxAttemptRequest'
+      responses:
+        '200':
+          description: The attempt is recorded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OutboxEvent'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '415':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
 components:
   securitySchemes:
     bearerAuth:
@@ -529,6 +563,16 @@ components:
             limit: {type: integer, minimum: 1, maximum: 100}
             total: {type: integer, minimum: 0}
             totalPages: {type: integer, minimum: 0}
+    OutboxAttemptRequest:
+      type: object
+      required: [error]
+      additionalProperties: false
+      properties:
+        error:
+          type: string
+          description: Trimmed; no control character, new lines included; at most 1000 UTF-16 units
+          minLength: 1
+          maxLength: 1000
     OutboxEvent:
       type: object
       description: An event waiting to be delivered, with the envelope of ADR-004 D4
