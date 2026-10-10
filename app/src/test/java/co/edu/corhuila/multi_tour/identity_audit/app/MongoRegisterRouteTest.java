@@ -109,6 +109,10 @@ class MongoRegisterRouteTest extends ShellTest {
         .header("Idempotency-Key", "onboard:1:step-1").body(BODY).post(ROUTE);
     assertThat(forbidden.statusCode()).isEqualTo(403);
     assertThat(forbidden.jsonPath().getString("error")).isEqualTo("FORBIDDEN");
+    // the role is judged before the body is read: a person with a broken body is refused, not told what is wrong
+    Response brokenBody = given().filter(Contract.answers()).header("Authorization", person).contentType(ContentType.JSON)
+        .header("Idempotency-Key", "onboard:1:step-1").body("{not json").post(ROUTE);
+    assertThat(brokenBody.statusCode()).isEqualTo(403);
     assertThat(client.getDatabase("identity_audit").getCollection("tenants").countDocuments()).isZero();
   }
 
