@@ -8,8 +8,10 @@ import java.util.Optional;
 public interface OutboxRepository {
 
   /**
-   * The pending events whose next attempt is not after {@code now}, oldest first and then by id. A page past
-   * the last is empty with the real total; compute the offset as a long.
+   * The pending events whose next attempt is not after {@code now}, the one due for longest first, then the
+   * oldest, then by id (a new event is due when it happens, so these are the oldest first). A page past the last
+   * is empty with the real total; compute the offset as a long. The set shrinks as events are published, so a
+   * reader that publishes reads page 1 until it is empty.
    */
   Page<OutboxEvent> due(Instant now, int page, int limit);
 
