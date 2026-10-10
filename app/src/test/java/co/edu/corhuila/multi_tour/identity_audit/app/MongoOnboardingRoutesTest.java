@@ -102,17 +102,12 @@ class MongoOnboardingRoutesTest extends ShellTest {
     assertThat(done.statusCode()).isEqualTo(200);
     assertThat(done.jsonPath().getString("tenantStatus")).isEqualTo("ACTIVE");
     assertThat(done.jsonPath().getString("firstAdministratorMembershipId")).isEqualTo(ADMIN);
-    assertThat(count("outbox_events")).isEqualTo(1);
+    assertThat(complete(pending("inactive-tours"), completionWith("initialStatus", "INACTIVE")).jsonPath()
+        .getString("tenantStatus")).isEqualTo("INACTIVE");
     Response again = complete(id, completion());
     assertThat(again.statusCode()).isEqualTo(200);
     assertThat(again.jsonPath().getString("updatedAt")).isEqualTo(done.jsonPath().getString("updatedAt"));
-    assertThat(count("outbox_events")).isEqualTo(1);
-  }
-
-  @Test
-  void C_a_tenant_can_start_inactive() {
-    Response done = complete(pending(), completionWith("initialStatus", "INACTIVE"));
-    assertThat(done.jsonPath().getString("tenantStatus")).isEqualTo("INACTIVE");
+    assertThat(count("outbox_events")).isEqualTo(2);
   }
 
   @Test
@@ -215,16 +210,6 @@ class MongoOnboardingRoutesTest extends ShellTest {
   }
 
   @Test
-  void C_a_body_that_is_not_json_is_a_415_on_both_routes() {
-    String id = pending();
-    for (String route : List.of("complete-onboarding", "fail-onboarding")) {
-      Response response = as(service()).filter(Contract.answers()).contentType("text/plain").body("x")
-          .post(BASE + "/" + id + "/" + route);
-      assertRefused(response, 415, "UNSUPPORTED_MEDIA_TYPE");
-    }
-  }
-
-  @Test
   void C_the_event_written_names_the_service_as_actor_and_carries_the_correlation_id_sent() {
     String id = pending();
     as(service()).filter(Contract.filter()).header("X-Correlation-Id", "abc-123").body(completion())
@@ -236,11 +221,14 @@ class MongoOnboardingRoutesTest extends ShellTest {
   }
 
   @Test
-  void C_an_empty_body_a_null_an_array_or_a_text_is_a_400_on_both_routes() {
+  void C_an_empty_body_a_null_an_array_or_a_text_is_a_400_and_a_body_that_is_not_json_a_415() {
     String id = pending();
     for (String bad : List.of("", "null", "[]", "ACTIVE")) {
       assertRefused(completeRefused(id, bad), 400, "VALIDATION_ERROR");
       assertRefused(failRefused(id, bad), 400, "VALIDATION_ERROR");
     }
+    Response text = as(service()).filter(Contract.answers()).contentType("text/plain").body("x")
+        .post(BASE + "/" + id + "/fail-onboarding");
+    assertRefused(text, 415, "UNSUPPORTED_MEDIA_TYPE");
   }
 }

@@ -29,7 +29,6 @@ class InternalOnboardingController {
 
   /** Texts, not enums, so that a number is never read as the position of a value. */
   record CompleteRequest(String firstAdministratorMembershipId, String initialStatus) {}
-
   record FailRequest(String failedStep) {}
 
   @PostMapping("/complete-onboarding")
