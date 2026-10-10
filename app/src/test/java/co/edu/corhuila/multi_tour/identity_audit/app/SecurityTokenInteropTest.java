@@ -31,7 +31,7 @@ class SecurityTokenInteropTest {
 
   @DynamicPropertySource
   static void securityKey(DynamicPropertyRegistry registry) {
-    registry.add("JWT_PUBLIC_KEY", () -> resource("security-public-key.pem").strip().replace("\n", "\\n"));
+    registry.add("JWT_PUBLIC_KEY", () -> resource("security-public-key.pub").strip().replace("\n", "\\n"));
     registry.add("MONGODB_URI", () -> "mongodb://localhost:27017/identity_audit"); // lazy: no route below reads it
   }
 
