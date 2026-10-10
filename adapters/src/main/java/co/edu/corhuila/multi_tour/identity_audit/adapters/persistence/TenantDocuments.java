@@ -2,10 +2,13 @@ package co.edu.corhuila.multi_tour.identity_audit.adapters.persistence;
 
 import co.edu.corhuila.multi_tour.identity_audit.core.tenant.FailedStep;
 import co.edu.corhuila.multi_tour.identity_audit.core.tenant.Tenant;
+import co.edu.corhuila.multi_tour.identity_audit.core.tenant.TenantEvent;
 import co.edu.corhuila.multi_tour.identity_audit.core.tenant.TenantStatus;
+import com.mongodb.client.model.Filters;
 import java.time.Instant;
 import java.util.Date;
 import org.bson.Document;
+import org.bson.conversions.Bson;
 
 /**
  * A tenant as the validator of the database expects it (the fields of {@code multi-tour-identity-audit-db}):
@@ -32,6 +35,38 @@ final class TenantDocuments {
     putIfPresent(document, "statusReason", tenant.statusReason());
     putIfPresent(document, "failedStep", tenant.failedStep() == null ? null : tenant.failedStep().name());
     return document;
+  }
+
+  /** The tenant is still as it was when the change was decided: every field that a change can touch is the same. */
+  static Bson stillIs(Tenant expected) {
+    return Filters.and(
+        Filters.eq("_id", expected.tenantId()),
+        Filters.eq("tenantStatus", expected.status().name()),
+        Filters.eq("updatedAt", Date.from(expected.updatedAt())),
+        Filters.eq("firstAdministratorMembershipId", expected.firstAdministratorMembershipId()),
+        Filters.eq("statusChangedAt", expected.statusChangedAt() == null ? null : Date.from(expected.statusChangedAt())),
+        Filters.eq("statusChangedBy", expected.statusChangedBy()),
+        Filters.eq("statusReason", expected.statusReason()),
+        Filters.eq("failedStep", expected.failedStep() == null ? null : expected.failedStep().name()));
+  }
+
+  /** An event waiting to be delivered, with the full new state of the tenant as its payload (no credentials). */
+  static Document toEventDocument(TenantEvent event) {
+    Tenant tenant = event.tenant();
+    Document payload = toDocument(tenant);
+    payload.remove("_id");
+    payload.put("tenantId", tenant.tenantId());
+    Date at = Date.from(event.occurredAt());
+    Document document =
+        new Document("_id", event.eventId())
+            .append("eventType", event.type().eventType())
+            .append("eventVersion", 1)
+            .append("tenantId", tenant.tenantId())
+            .append("aggregateId", tenant.tenantId())
+            .append("actorId", event.actor().strip());
+    putIfPresent(document, "reason", tenant.statusReason());
+    return document.append("payload", payload).append("correlationId", event.correlationId())
+        .append("occurredAt", at).append("status", "PENDING").append("attempts", 0).append("nextAttemptAt", at);
   }
 
   static Tenant toTenant(Document document) {
