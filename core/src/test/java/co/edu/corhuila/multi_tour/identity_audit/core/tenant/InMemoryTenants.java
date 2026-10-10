@@ -1,6 +1,8 @@
 package co.edu.corhuila.multi_tour.identity_audit.core.tenant;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -9,10 +11,16 @@ final class InMemoryTenants implements TenantRepository {
 
   final Map<String, Tenant> tenants = new HashMap<>();
   final Map<RepeatKey, String> keys = new HashMap<>();
-  /** Runs just before the next insert: another request that arrives first, with real state behind it. */
-  Runnable beforeNextInsert;
+  final List<TenantEvent> events = new ArrayList<>();
+  /** Runs just before the next insert or update: another request that arrives first, with real state. */
+  Runnable beforeNextWrite;
   /** A real adapter may find the identifier conflict before the key one: both orders must be answered. */
   boolean identifierConflictFirst;
+
+  @Override
+  public Optional<Tenant> findById(String tenantId) {
+    return Optional.ofNullable(tenants.get(tenantId));
+  }
 
   @Override
   public Optional<Tenant> findByIdentifier(String identifier) {
@@ -26,13 +34,17 @@ final class InMemoryTenants implements TenantRepository {
     return Optional.ofNullable(keys.get(key)).map(tenants::get);
   }
 
-  @Override
-  public void insert(Tenant tenant, RepeatKey key) {
-    if (beforeNextInsert != null) {
-      Runnable winner = beforeNextInsert;
-      beforeNextInsert = null;
+  private void anotherRequestArrivesFirst() {
+    if (beforeNextWrite != null) {
+      Runnable winner = beforeNextWrite;
+      beforeNextWrite = null;
       winner.run();
     }
+  }
+
+  @Override
+  public void insert(Tenant tenant, RepeatKey key) {
+    anotherRequestArrivesFirst();
     boolean keyTaken = keys.containsKey(key);
     boolean identifierTaken = findByIdentifier(tenant.identifier()).isPresent();
     if (identifierTaken && (identifierConflictFirst || !keyTaken)) {
@@ -43,5 +55,16 @@ final class InMemoryTenants implements TenantRepository {
     }
     tenants.put(tenant.tenantId(), tenant);
     keys.put(key, tenant.tenantId());
+  }
+
+  @Override
+  public void update(Tenant expected, Tenant next, List<TenantEvent> caused) {
+    anotherRequestArrivesFirst();
+    Tenant stored = tenants.get(next.tenantId());
+    if (!expected.equals(stored)) {
+      throw new ConcurrentChangeException(next.tenantId());
+    }
+    tenants.put(next.tenantId(), next);
+    events.addAll(caused);
   }
 }
