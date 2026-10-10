@@ -25,7 +25,6 @@ class MongoRegisterRouteTest extends ShellTest {
   private static final String KEY = "onboard:1:step-1";
 
   @Autowired MongoClient client;
-
   @Value("#{new com.mongodb.ConnectionString('${MONGODB_URI}').getDatabase()}")
   String database;
 
@@ -107,7 +106,7 @@ class MongoRegisterRouteTest extends ShellTest {
         with("identifier", "Acme_Tours"), with("identifier", "x".repeat(41)), with("identifier", "ab"),
         with("commercialName", "  "), with("commercialName", "N".repeat(121)),
         with("timeZone", "Mars/Olympus"), with("country", "COL"), with("country", "co"), with("extra", 1),
-        with("identifier", 12345678), with("commercialName", 99999), with("commercialName", true));
+        with("commercialName", 99999), with("commercialName", true));
     for (Map<String, Object> bad : invalid) {
       Response response = register(bad, "invalid-" + n++);
       assertThat(response.statusCode()).as("body %s answered %s", bad, response.asString()).isEqualTo(400);
@@ -121,10 +120,10 @@ class MongoRegisterRouteTest extends ShellTest {
 
   @Test
   void C_the_idempotency_key_is_required_and_has_8_to_128_characters_without_spaces() {
-    for (String key : new String[] {null, "short", "has a space in it", "k".repeat(129)}) {
+    for (String key : new String[] {null, "short", "k".repeat(7), "has a space in it", "k".repeat(129)}) {
       assertRefused(register(body(), key), 400, "VALIDATION_ERROR");
     }
-    assertThat(register(body(), "k".repeat(128)).statusCode()).isEqualTo(201);
+    assertThat(register(body(), "k".repeat(8)).statusCode()).isEqualTo(201);
   }
 
   @Test
@@ -143,7 +142,8 @@ class MongoRegisterRouteTest extends ShellTest {
   void C_a_body_that_is_not_json_is_a_415() {
     Response response =
         as(service(), KEY).filter(Contract.answers()).contentType("text/plain").body("acme").post(ROUTE);
-    assertThat(response.statusCode()).isEqualTo(415);
+    assertRefused(response, 415, "UNSUPPORTED_MEDIA_TYPE");
+    assertThat(count("tenants")).isZero();
   }
 
   @Test

@@ -12,11 +12,8 @@ import org.springframework.context.annotation.Configuration;
 class JsonConfig {
   @Bean
   Jackson2ObjectMapperBuilderCustomizer textsAreOnlyTexts() {
-    return builder -> builder.postConfigurer(mapper -> {
-      for (CoercionInputShape shape : new CoercionInputShape[] {
-          CoercionInputShape.Integer, CoercionInputShape.Float, CoercionInputShape.Boolean}) {
-        mapper.coercionConfigFor(LogicalType.Textual).setCoercion(shape, CoercionAction.Fail);
-      }
-    });
+    return builder -> builder.postConfigurer(mapper -> java.util.stream.Stream.of(
+        CoercionInputShape.Integer, CoercionInputShape.Float, CoercionInputShape.Boolean)
+        .forEach(shape -> mapper.coercionConfigFor(LogicalType.Textual).setCoercion(shape, CoercionAction.Fail)));
   }
 }

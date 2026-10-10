@@ -9,7 +9,6 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-/** The routes the saga {@code onboard-tenant} calls with its service token; the role is judged before anything here. */
 @RestController
 @RequestMapping("/api/v1/identity-audit/internal/tenants")
 class InternalTenantController {

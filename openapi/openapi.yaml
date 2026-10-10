@@ -157,6 +157,10 @@ components:
         firstAdministratorMembershipId:
           type: string
           format: uuid
+        statusChangedAt: {type: string, format: date-time}
+        statusChangedBy: {type: string}
+        statusReason: {type: string}
+        failedStep: {type: string, enum: [CREATE_ACCOUNT, APPLY_STATUS]}
         createdAt:
           type: string
           format: date-time
