@@ -83,7 +83,8 @@ class MongoListPlansTest {
       }
     }
     Document explained = client.getDatabase(url.getDatabase()).runCommand(new Document("explain", command).append("verbosity", "queryPlanner"));
-    return explained.toJson();
+    // only the plan that wins: the rejected ones are rejected exactly because they sort in memory
+    return explained.get("queryPlanner", Document.class).get("winningPlan", Document.class).toJson();
   }
 
   private static void assertServedByIndex(String plan, String index) {
