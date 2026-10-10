@@ -76,6 +76,7 @@ class StatusChangesTest {
     assertThatThrownBy(() -> inactivate.execute(stop(active.tenantId(), "again")))
         .isInstanceOf(InvalidStatusTransitionException.class);
     assertThat(tenants.findById(active.tenantId())).contains(off);
+    assertThat(tenants.events).isEmpty();
     reactivate.execute(resume(active.tenantId(), "paid"));
     tenants.events.clear();
     assertThatThrownBy(() -> reactivate.execute(resume(active.tenantId(), "again")))
@@ -91,6 +92,8 @@ class StatusChangesTest {
         .isInstanceOf(InvalidStatusTransitionException.class);
     assertThatThrownBy(() -> reactivate.execute(resume(pending.tenantId(), "why")))
         .isInstanceOf(InvalidStatusTransitionException.class);
+    assertThat(tenants.findById(pending.tenantId())).contains(pending);
+    assertThat(tenants.events).isEmpty();
   }
 
   @Test
@@ -114,5 +117,41 @@ class StatusChangesTest {
         .isInstanceOf(InvalidStatusTransitionException.class);
     assertThat(tenants.findById(active.tenantId()).orElseThrow().statusReason()).isEqualTo("first reason");
     assertThat(tenants.events).hasSize(1);
+  }
+
+  @Test
+  void A_the_actor_is_checked_like_the_reason_and_is_the_same_value_in_the_tenant_and_the_event() {
+    assertThatThrownBy(() -> inactivate.execute(new InactivateTenant.Command(UNKNOWN, "a" + (char) 10 + "b", "why", "corr-1")))
+        .isInstanceOf(IllegalArgumentException.class);
+    var off = inactivate.execute(new InactivateTenant.Command(active.tenantId(), " admin ", "why", "corr-1"));
+    assertThat(off.statusChangedBy()).isEqualTo("admin");
+    assertThat(tenants.events).singleElement().satisfies(event -> assertThat(event.actor()).isEqualTo("admin"));
+  }
+
+  @Test
+  void A_two_reactivations_at_once_leave_the_reason_of_the_first_and_refuse_the_second() {
+    inactivate.execute(stop(active.tenantId(), "unpaid"));
+    tenants.events.clear();
+    var twin = new ReactivateTenant(tenants, ids, clock);
+    tenants.beforeNextWrite = () -> twin.execute(resume(active.tenantId(), "first reason"));
+    assertThatThrownBy(() -> reactivate.execute(resume(active.tenantId(), "second reason")))
+        .isInstanceOf(InvalidStatusTransitionException.class);
+    assertThat(tenants.findById(active.tenantId()).orElseThrow().statusReason()).isEqualTo("first reason");
+    assertThat(tenants.events).hasSize(1);
+  }
+
+  @Test
+  void A_a_second_race_in_a_row_is_not_retried_again() {
+    // another request changes the tenant, leaving it valid for this change, each time before the write
+    Runnable second = () -> tenants.tenants.put(active.tenantId(),
+        active.inactivate("a", "b", NOW.plusSeconds(3)).reactivate("a", "c", NOW.plusSeconds(4)));
+    tenants.beforeNextWrite = () -> {
+      tenants.tenants.put(active.tenantId(),
+          active.inactivate("a", "b", NOW.plusSeconds(1)).reactivate("a", "c", NOW.plusSeconds(2)));
+      tenants.beforeNextWrite = second;
+    };
+    assertThatThrownBy(() -> inactivate.execute(stop(active.tenantId(), "why")))
+        .isInstanceOf(ConcurrentChangeException.class);
+    assertThat(tenants.events).isEmpty();
   }
 }
