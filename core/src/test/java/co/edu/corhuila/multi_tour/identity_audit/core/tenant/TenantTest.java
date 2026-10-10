@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.Instant;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class TenantTest {
@@ -261,5 +262,17 @@ class TenantTest {
   void D_the_text_form_of_a_tenant_leaves_out_what_a_person_wrote() {
     String text = inactive().toString();
     assertThat(text).contains(ID, "acme-tours", "INACTIVE").doesNotContain("unpaid", "Acme Tours", "platform-admin");
+  }
+
+  @Test
+  void D_every_refusal_of_data_is_an_invalid_data_exception_that_the_caller_can_be_told() {
+    assertThatThrownBy(() -> Tenant.registerPending(ID, "Bad_Identifier", "Acme", "America/Bogota", "CO", T0))
+        .isInstanceOf(InvalidDataException.class);
+    assertThatThrownBy(() -> active().inactivate("platform-admin", " ", T1)).isInstanceOf(InvalidDataException.class);
+    assertThatThrownBy(() -> new ListTenants.Query(null, 0, 20)).isInstanceOf(InvalidDataException.class);
+    assertThatThrownBy(() -> new RepeatKey("operation", "short")).isInstanceOf(InvalidDataException.class);
+    assertThatThrownBy(() -> new Page<String>(List.of(), 0, 20, 0)).isInstanceOf(InvalidDataException.class);
+    assertThatThrownBy(() -> new TenantEvent(ID, TenantEventType.TENANT_CREATED, active(), " ", "corr", T0))
+        .isInstanceOf(InvalidDataException.class);
   }
 }

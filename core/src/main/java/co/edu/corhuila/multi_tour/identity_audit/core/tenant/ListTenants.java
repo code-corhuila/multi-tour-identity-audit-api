@@ -8,7 +8,7 @@ public final class ListTenants {
 
     public Query {
       if (page < 1 || limit < 1 || limit > 100) {
-        throw new IllegalArgumentException("The page starts at 1 and the limit is from 1 to 100");
+        throw new InvalidDataException("The page starts at 1 and the limit is from 1 to 100");
       }
     }
   }

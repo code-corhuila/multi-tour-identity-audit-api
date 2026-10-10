@@ -14,7 +14,7 @@ public final class FailOnboarding {
     public Command {
       Tenant.requireUuid(tenantId, "The tenant");
       if (step == null) {
-        throw new IllegalArgumentException("The failed step is required");
+        throw new InvalidDataException("The failed step is required");
       }
     }
   }

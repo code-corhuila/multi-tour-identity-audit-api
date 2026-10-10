@@ -142,4 +142,16 @@ class MongoTenantRepositoryTest {
     assertThat(count("tenants")).isEqualTo(1);
     assertThat(count("idempotency_keys")).isEqualTo(1);
   }
+
+  @Test
+  void I_a_stored_tenant_that_breaks_an_invariant_is_a_failure_of_ours_and_not_a_refusal_of_the_caller() {
+    // the validator cannot say that a pending tenant has no administrator; the core does
+    client.getDatabase(url.getDatabase()).getCollection("tenants").insertOne(new Document("_id", "00000000-0000-4000-8000-000000000001")
+        .append("identifier", "corrupt-one").append("commercialName", "Corrupt").append("tenantStatus", "PENDING")
+        .append("timeZone", "America/Bogota").append("country", "CO").append("createdAt", java.util.Date.from(NOW))
+        .append("updatedAt", java.util.Date.from(NOW))
+        .append("firstAdministratorMembershipId", "00000000-0000-4000-8000-0000000000aa"));
+    assertThatThrownBy(() -> tenants.findById("00000000-0000-4000-8000-000000000001"))
+        .isInstanceOf(IllegalStateException.class);
+  }
 }
