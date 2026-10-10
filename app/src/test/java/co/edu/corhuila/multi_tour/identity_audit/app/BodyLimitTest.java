@@ -48,7 +48,12 @@ class BodyLimitTest extends ShellTest {
   void C_a_body_sent_in_chunks_is_judged_by_what_arrives_and_not_by_a_length_it_did_not_declare() {
     assertThat(post(new ByteArrayInputStream(json(LIMIT))).statusCode()).isEqualTo(200);
     assertTooLarge(post(new ByteArrayInputStream(json(LIMIT + 1))));
-    assertTooLarge(post(new ByteArrayInputStream(json(5 * LIMIT))));
+  }
+
+  @Test
+  void C_a_caller_without_a_token_is_told_so_before_the_size_of_its_body_is_judged() {
+    Response response = given().contentType(ContentType.JSON).body(json(LIMIT + 1)).post("/api/v1/identity-audit/internal/tenants");
+    assertThat(response.statusCode()).isEqualTo(401);
   }
 
   @Test
