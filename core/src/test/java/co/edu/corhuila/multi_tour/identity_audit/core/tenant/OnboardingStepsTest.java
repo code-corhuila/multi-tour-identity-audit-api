@@ -74,8 +74,9 @@ class OnboardingStepsTest {
   @Test
   void A_complete_with_other_data_on_a_tenant_that_is_not_pending_is_refused() {
     complete.execute(completion(pending.tenantId(), TenantStatus.ACTIVE));
-    assertThatThrownBy(() -> complete.execute(completion(pending.tenantId(), TenantStatus.INACTIVE)))
-        .isInstanceOf(InvalidStatusTransitionException.class);
+    var other = new CompleteOnboarding.Command(pending.tenantId(), "00000000-0000-4000-8000-0000000000bb",
+        TenantStatus.ACTIVE, "onboard-tenant", "corr-1");
+    assertThatThrownBy(() -> complete.execute(other)).isInstanceOf(InvalidStatusTransitionException.class);
     var failed = new RegisterPendingTenant(tenants, ids, clock)
         .execute(new RegisterPendingTenant.Command("other-one", "Other", "America/Bogota", "CO", "key-0000002")).tenant();
     fail.execute(failure(failed.tenantId(), FailedStep.CREATE_ACCOUNT));
