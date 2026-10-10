@@ -113,6 +113,16 @@ class OutboxUseCasesTest {
   }
 
   @Test
+  void A_an_error_with_a_bidi_override_a_zero_width_or_a_line_separator_is_refused_and_a_plain_space_is_not() {
+    for (String bad : new String[] {"ok\u202eevil", "ok\u200bevil", "ok\u2028evil", "ok\u2029evil", "ok\u00a0evil", "ok\u3000evil", "ok\ufeffevil", "ok\uDB40\uDC41evil", "ok\uD800evil", "ok\ue000evil"}) {
+      assertThatThrownBy(() -> new RecordFailedAttempt.Command(ID, bad)).as(bad).isInstanceOf(InvalidDataException.class);
+    }
+    assertThat(new RecordFailedAttempt.Command(ID, "consumer answered 503 twice").error()).isEqualTo("consumer answered 503 twice");
+    String withEmoji = "consumer said \uD83D\uDE00 and caf\u00e9";
+    assertThat(new RecordFailedAttempt.Command(ID, withEmoji).error()).isEqualTo(withEmoji);
+  }
+
+  @Test
   void A_a_request_that_raced_with_another_decides_again_on_what_the_other_left() {
     stored(event(ID, 1, NOW));
     outbox.beforeNextWrite = () -> publish.execute(ID);

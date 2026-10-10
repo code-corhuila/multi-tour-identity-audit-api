@@ -122,7 +122,7 @@ class MongoOutboxAttemptsRouteTest extends ShellTest {
     nulled.put("error", null);
     for (Object bad : List.of(Map.of(), nulled, Map.of("error", "  "), Map.of("error", "e".repeat(1001)), Map.of("error", 5),
         Map.of("error", "ok", "extra", 1), "{\"error\":\"a\\nb\"}", "{\"error\":\"a\",\"error\":\"b\"}", "{\"error\":[\"a\"]}", "{\"error\":{}}",
-        "{not json", "", "null", "[]")) {
+        "{\"error\":\"ok\\u202eevil\"}", "{\"error\":\"ok\\u2028evil\"}", "{not json", "", "null", "[]")) {
       assertRefused(refused(id, bad), 400, "VALIDATION_ERROR");
     }
     assertRefused(refused("not-a-uuid", Map.of("error", "ok")), 400, "VALIDATION_ERROR");
