@@ -11,7 +11,7 @@ A Java 21 / Spring Boot 3.5 service in three Maven modules: `core` (the domain a
 
 ## How to start it
 
-Not yet: the HTTP shell and the image come with the next tasks of the spec of HU-IDA-001. Variables are listed in `.env.example`.
+The image is built and run by the composition of the platform: `multi-tour-infra-postgres` includes `deploy/compose.yml`, which defines the service `identity-audit-api` on the network `platform`. It exposes 8082 and publishes no port: only the gateway is reachable from the host. It needs `JWT_PUBLIC_KEY` (or `JWT_PUBLIC_KEY_FILE`), the public key of the security microservice; without it the service stops at start and says so. For a development key, `scripts/dev-keys.sh` of the infrastructure makes one. To try the image alone, `sh deploy/tests/deploy-check.sh` builds it, starts it with a key made on the spot and asks it for `/health` and for a protected route; it needs Docker and openssl.
 
 ## Where the data is
 
@@ -19,11 +19,11 @@ In the database `identity_audit` of the MongoDB instance of `multi-tour-infra-mo
 
 ## How to test it
 
-`mvn -B verify` with Java 21. It runs on every pull request to `develop` and `qa` (`ci.yml`).
+`mvn -B verify` with Java 21, and `sh deploy/tests/deploy-check.sh` for the image. Both run on every pull request to `develop` and `qa` (`ci.yml`).
 
 ## What is missing
 
-Everything but the structure: see `07-api/specs/identity-audit/multi-tour-identity-audit-api/` in `multi-tour-docs`.
+The tenant lifecycle itself (the routes, the persistence, the events): see `07-api/specs/identity-audit/multi-tour-identity-audit-api/` in `multi-tour-docs`.
 
 ## Branching
 

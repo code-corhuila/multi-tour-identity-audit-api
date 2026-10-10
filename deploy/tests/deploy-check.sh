@@ -17,6 +17,7 @@ JRE_IMAGE="${JRE_IMAGE:-eclipse-temurin:21.0.8_9-jre}"
 RUN_ID="idaapi-deploy-$$"
 fail=0
 
+KEYFILE=
 cleanup() {
   docker rm -f "$RUN_ID" >/dev/null 2>&1 || true
   docker rmi "$RUN_ID" >/dev/null 2>&1 || true
@@ -36,11 +37,14 @@ build_image() {
 }
 
 compose_has_no_published_port_database_or_volume() {
-  out=$(JWT_PUBLIC_KEY=x docker compose -f deploy/compose.yml config) || { echo "$out"; return 1; }
-  echo "$out" | grep -q '^ *ports:' && { echo "the file publishes a port"; return 1; }
-  echo "$out" | grep -q '8082' || { echo "the file exposes no 8082"; return 1; }
-  echo "$out" | grep -qi 'mongo:\|postgres:\|^volumes:' && { echo "the file defines a database or a volume"; return 1; }
-  return 0
+  json=$(JWT_PUBLIC_KEY=x docker compose -f deploy/compose.yml config --format json 2>&1) || { echo "$json"; return 1; }
+  flat=$(printf '%s' "$json" | tr -d ' 
+')
+  case $flat in *'"published"'*|*'"ports"'*) echo "the file publishes a port"; return 1 ;; esac
+  case $flat in *'"expose":["8082"]'*) ;; *) echo "the service does not expose 8082"; return 1 ;; esac
+  case $flat in *'"volumes"'*) echo "the file defines a volume"; return 1 ;; esac
+  services=$(JWT_PUBLIC_KEY=x docker compose -f deploy/compose.yml config --services)
+  [ "$services" = "identity-audit-api" ] || { echo "the file defines more than the service: $services"; return 1; }
 }
 
 # A one-line public key, as the service reads it from JWT_PUBLIC_KEY
@@ -52,22 +56,30 @@ make_key() {
 
 starts_and_answers() {
   make_key || { echo "could not make a key"; return 1; }
-  docker run -d --name "$RUN_ID" -p 127.0.0.1::8082 -e PORT=8082 -e JWT_PUBLIC_KEY="$(cat "$KEYFILE")" "$RUN_ID" >/dev/null || return 1
+  # the flags of the compose file, so what it declares is what is tried
+  docker run -d --name "$RUN_ID" --read-only --tmpfs /tmp --cap-drop ALL --security-opt no-new-privileges -p 127.0.0.1::8082 -e PORT=8082 -e JWT_PUBLIC_KEY="$(cat "$KEYFILE")" "$RUN_ID" >/dev/null || return 1
   port=$(docker port "$RUN_ID" 8082/tcp | head -n 1 | sed 's/.*://')
   health=000
   for _ in $(seq 1 40); do
-    health=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$port/health" || true)
+    health=$(curl -s --max-time 3 -o /dev/null -w '%{http_code}' "http://127.0.0.1:$port/health" || true)
     [ "$health" = 200 ] && break
     sleep 1
   done
   [ "$health" = 200 ] || { echo "/health answered $health"; docker logs "$RUN_ID" 2>&1 | tail -n 5; return 1; }
-  protected=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$port/api/v1/identity-audit/tenants")
+  protected=$(curl -s --max-time 3 -o /dev/null -w '%{http_code}' "http://127.0.0.1:$port/api/v1/identity-audit/tenants")
   [ "$protected" = 401 ] || { echo "a protected route without a token answered $protected"; return 1; }
 }
 
 check "I·api_image_builds" build_image
 check "I·api_compose_publishes_no_port_and_defines_no_database" compose_has_no_published_port_database_or_volume
+# The README promises that the service stops at start, saying why, when it has no public key
+stops_without_a_key() {
+  out=$(docker run --rm -e PORT=8082 "$RUN_ID" 2>&1) && { echo "the service started without a public key"; return 1; }
+  printf '%s' "$out" | grep -q 'JWT_PUBLIC_KEY' || { echo "the message does not name JWT_PUBLIC_KEY"; return 1; }
+}
+
 check "I·api_image_starts_answers_health_and_protects_the_api" starts_and_answers
+check "I·api_image_stops_without_a_public_key_and_says_why" stops_without_a_key
 
 [ "$fail" = 0 ] && echo "ALL CHECKS PASSED" || echo "SOME CHECKS FAILED"
 exit "$fail"
