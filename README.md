@@ -23,7 +23,7 @@ In the database `identity_audit` of the MongoDB instance of `multi-tour-infra-mo
 
 ## What is missing
 
-The tenant lifecycle itself (the routes, the persistence, the events): see `07-api/specs/identity-audit/multi-tour-identity-audit-api/` in `multi-tour-docs`.
+The audit of sensitive actions and the other stories of the domain: see `07-api/specs/identity-audit/` in `multi-tour-docs`.
 
 ## Branching
 
