@@ -31,7 +31,7 @@ jobs:
           MONGO_IMAGE: public.ecr.aws/docker/library/mongo:8.0.32
           LIQUIBASE_BASE: ghcr.io/liquibase/liquibase:5.0.4
           # The commit of multi-tour-identity-audit-db the tests run against; moved on purpose, with the change here that needs it
-          DB_REPO_REF: 04da8fecd64f034ba50dc8417f8de5309440d483
+          DB_REPO_REF: bf1ee3fb858069822b0d851a301d6d080be9acb4
         run: |
           url=$(sh scripts/prepare-test-db.sh up)
           echo "TEST_DATABASE_URL=$url" >> "$GITHUB_ENV"
