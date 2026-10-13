@@ -58,4 +58,16 @@ class RouteAuthorizationTest {
       assertThatThrownBy(() -> passes(disguised, SERVICE)).as("service on %s", disguised).isInstanceOf(ForbiddenException.class);
     }
   }
+
+  @Test
+  void C_the_visual_identity_route_is_for_the_tenant_administrator_and_only_for_it() {
+    Caller tenantAdmin = new Caller("account-2", "00000000-0000-4000-8000-00000000000a", Set.of(Role.TENANT_ADMINISTRATOR));
+    String route = "/api/v1/identity-audit/tenant/visual-identity";
+    assertThatCode(() -> passes(route, tenantAdmin)).doesNotThrowAnyException();
+    assertThatThrownBy(() -> passes(route, ADMIN)).isInstanceOf(ForbiddenException.class);
+    assertThatThrownBy(() -> passes(route, SERVICE)).isInstanceOf(ForbiddenException.class);
+    assertThatThrownBy(() -> passes(PLATFORM, tenantAdmin)).isInstanceOf(ForbiddenException.class);
+    assertThatThrownBy(() -> passes(INTERNAL, tenantAdmin)).isInstanceOf(ForbiddenException.class);
+    assertThatThrownBy(() -> passes(route + ";x=1", tenantAdmin)).isInstanceOf(ForbiddenException.class);
+  }
 }
