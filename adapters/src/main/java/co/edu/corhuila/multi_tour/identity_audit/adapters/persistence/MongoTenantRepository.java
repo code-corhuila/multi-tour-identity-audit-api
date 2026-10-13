@@ -3,6 +3,8 @@ package co.edu.corhuila.multi_tour.identity_audit.adapters.persistence;
 import static com.mongodb.client.model.Filters.and;
 import static com.mongodb.client.model.Filters.eq;
 import static com.mongodb.client.model.Filters.in;
+import static com.mongodb.client.model.Updates.combine;
+import static com.mongodb.client.model.Updates.set;
 
 import co.edu.corhuila.multi_tour.identity_audit.core.tenant.ConcurrentChangeException;
 import co.edu.corhuila.multi_tour.identity_audit.core.tenant.IdentifierTakenException;
@@ -136,9 +138,16 @@ public final class MongoTenantRepository implements TenantRepository {
     }
   }
 
-  /** shortcut: not written yet, the adapter comes with API-26 of HU-IDA-003; the route answers 500 until then. */
+  /**
+   * One write on one document, so no transaction: it matches only a tenant that is still active, and moves
+   * {@code updatedAt}, which makes a status change decided on the old state fail its own filter.
+   */
   @Override
   public boolean saveVisualIdentity(String tenantId, VisualIdentity identity, Instant now) {
-    throw new UnsupportedOperationException("The visual identity is not stored by this adapter yet");
+    return tenants().withWriteConcern(WriteConcern.MAJORITY)
+        .updateOne(
+            and(eq("_id", tenantId), eq("tenantStatus", TenantStatus.ACTIVE.name())),
+            combine(set("visualIdentity", TenantDocuments.colors(identity)), set("updatedAt", Date.from(now))))
+        .getMatchedCount() == 1;
   }
 }
