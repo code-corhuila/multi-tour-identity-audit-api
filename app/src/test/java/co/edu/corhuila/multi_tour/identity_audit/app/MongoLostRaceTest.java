@@ -11,6 +11,7 @@ import co.edu.corhuila.multi_tour.identity_audit.core.tenant.Tenant;
 import co.edu.corhuila.multi_tour.identity_audit.core.tenant.TenantEvent;
 import co.edu.corhuila.multi_tour.identity_audit.core.tenant.TenantRepository;
 import co.edu.corhuila.multi_tour.identity_audit.core.tenant.TenantStatus;
+import co.edu.corhuila.multi_tour.identity_audit.core.tenant.VisualIdentity;
 import co.edu.corhuila.multi_tour.identity_audit.core.outbox.OutboxEvent;
 import co.edu.corhuila.multi_tour.identity_audit.core.outbox.OutboxRepository;
 import co.edu.corhuila.multi_tour.identity_audit.adapters.persistence.MongoOutboxRepository;
@@ -56,6 +57,7 @@ class MongoLostRaceTest extends ShellTest {
         public Optional<Tenant> findByRepeatKey(RepeatKey key) { return real.findByRepeatKey(key); }
         public void insert(Tenant tenant, RepeatKey key) { real.insert(tenant, key); }
         public void update(Tenant expected, Tenant next, List<TenantEvent> events) { throw new ConcurrentChangeException(next.tenantId()); }
+        public boolean saveVisualIdentity(String tenantId, VisualIdentity identity, Instant now) { return false; }
       };
     }
 
