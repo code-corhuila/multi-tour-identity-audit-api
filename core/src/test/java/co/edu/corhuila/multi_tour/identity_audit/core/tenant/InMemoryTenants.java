@@ -1,5 +1,6 @@
 package co.edu.corhuila.multi_tour.identity_audit.core.tenant;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -80,5 +81,16 @@ final class InMemoryTenants implements TenantRepository {
     }
     tenants.put(next.tenantId(), next);
     events.addAll(caused);
+  }
+
+  @Override
+  public boolean saveVisualIdentity(String tenantId, VisualIdentity identity, Instant now) {
+    anotherRequestArrivesFirst();
+    Tenant stored = tenants.get(tenantId);
+    if (stored == null || stored.status() != TenantStatus.ACTIVE) {
+      return false;
+    }
+    tenants.put(tenantId, stored.withVisualIdentity(identity, now));
+    return true;
   }
 }

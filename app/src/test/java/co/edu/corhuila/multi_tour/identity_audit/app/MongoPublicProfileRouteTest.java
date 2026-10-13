@@ -64,7 +64,7 @@ class MongoPublicProfileRouteTest extends ShellTest {
     complete("acme-tours", "ACTIVE");
     Response response = profile("acme-tours");
     assertThat(response.statusCode()).isEqualTo(200);
-    assertThat(response.jsonPath().getMap("$").keySet()).containsExactlyInAnyOrder("identifier", "commercialName", "tenantStatus");
+    assertThat(response.jsonPath().getMap("$").keySet()).containsExactlyInAnyOrder("identifier", "commercialName", "tenantStatus", "visualIdentity");
     assertThat(response.jsonPath().getString("commercialName")).isEqualTo("Tours acme-tours");
     assertThat(response.jsonPath().getString("tenantStatus")).isEqualTo("ACTIVE");
     assertThat(response.header("Cache-Control")).isEqualTo("no-store");
