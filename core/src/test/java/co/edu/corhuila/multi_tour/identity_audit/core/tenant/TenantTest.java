@@ -275,4 +275,25 @@ class TenantTest {
     assertThatThrownBy(() -> new TenantEvent(ID, TenantEventType.TENANT_CREATED, active(), " ", "corr", T0))
         .isInstanceOf(InvalidDataException.class);
   }
+
+  @Test
+  void D_inactive_tenant_refuses_a_visual_identity() {
+    VisualIdentity identity = new VisualIdentity("#1A2B3C", "#ABCDEF");
+    for (Tenant tenant : new Tenant[] {inactive(), pending(), pending().failOnboarding(FailedStep.CREATE_ACCOUNT, T1)}) {
+      assertThatThrownBy(() -> tenant.withVisualIdentity(identity, T1)).isInstanceOf(BusinessRuleViolationException.class);
+    }
+    assertThatThrownBy(() -> active().withVisualIdentity(null, T1)).isInstanceOf(InvalidDataException.class);
+  }
+
+  @Test
+  void D_active_tenant_takes_a_visual_identity_and_keeps_it_through_status_changes() {
+    assertThat(active().visualIdentity()).isNull();
+    VisualIdentity identity = new VisualIdentity("#1a2b3c", "#abcdef");
+    Tenant styled = active().withVisualIdentity(identity, T1);
+    assertThat(styled.visualIdentity()).isEqualTo(identity);
+    assertThat(styled.status()).isEqualTo(TenantStatus.ACTIVE);
+    assertThat(styled.updatedAt()).isEqualTo(T1);
+    assertThat(styled.withVisualIdentity(identity, T1)).isEqualTo(styled);
+    assertThat(styled.inactivate("platform-admin", "unpaid", T1).visualIdentity()).isEqualTo(identity);
+  }
 }
