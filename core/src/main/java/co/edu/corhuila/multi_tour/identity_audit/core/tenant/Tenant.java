@@ -10,7 +10,8 @@ import java.util.regex.Pattern;
  * becomes active or inactive, or failed if that Administrator cannot be created. An active tenant is
  * inactivated and an inactive one reactivated, each with who, when and why; nothing else leaves inactive,
  * and a failed tenant is final. Every change answers a new tenant; a refused one leaves the old as it was.
- * One that is built, new or read from the database, gets the same checks. A bad argument is an
+ * An active tenant also takes the colors of its visual identity; any other refuses them as a business rule
+ * violation. One that is built, new or read from the database, gets the same checks. A bad argument is an
  * {@link IllegalArgumentException}, checked before the status, so the caller answers 400 before 422.
  */
 public record Tenant(
@@ -26,7 +27,8 @@ public record Tenant(
     String statusChangedBy,
     String statusReason,
     FailedStep failedStep,
-    Instant updatedAt) {
+    Instant updatedAt,
+    VisualIdentity visualIdentity) {
 
   private static final Pattern IDENTIFIER = Pattern.compile("[a-z0-9]+(-[a-z0-9]+)*");
   private static final Pattern UUID_FORMAT =
@@ -64,11 +66,21 @@ public record Tenant(
     statusChangedAt = statusChangedAt == null ? null : moment(statusChangedAt);
   }
 
+  /** A tenant with no visual identity: the one the platform's default colors serve. */
+  public Tenant(
+      String tenantId, String identifier, String commercialName, String timeZone, String country,
+      Instant createdAt, TenantStatus status, String firstAdministratorMembershipId, Instant statusChangedAt,
+      String statusChangedBy, String statusReason, FailedStep failedStep, Instant updatedAt) {
+    this(tenantId, identifier, commercialName, timeZone, country, createdAt, status,
+        firstAdministratorMembershipId, statusChangedAt, statusChangedBy, statusReason, failedStep, updatedAt,
+        null);
+  }
+
   public static Tenant registerPending(
       String tenantId, String identifier, String commercialName, String timeZone, String country, Instant now) {
     return new Tenant(
         tenantId, identifier, commercialName, timeZone, country, now, TenantStatus.PENDING, null, null, null, null,
-        null, now);
+        null, now, null);
   }
 
   public Tenant completeOnboarding(String firstAdministratorMembershipId, TenantStatus initialStatus, Instant now) {
@@ -98,6 +110,21 @@ public record Tenant(
     return change(TenantStatus.INACTIVE, TenantStatus.ACTIVE, "be reactivated", by, reason, now);
   }
 
+  /**
+   * The colors of the company, replacing any earlier ones. Only an active tenant takes them: any other is a
+   * business rule violation, not a status transition, because no status changes.
+   */
+  public Tenant withVisualIdentity(VisualIdentity identity, Instant now) {
+    require(identity != null, "The visual identity is required");
+    Instant at = moment(now);
+    if (status != TenantStatus.ACTIVE) {
+      throw new BusinessRuleViolationException("A " + status + " tenant cannot change its visual identity");
+    }
+    return new Tenant(
+        tenantId, identifier, commercialName, timeZone, country, createdAt, status,
+        firstAdministratorMembershipId, statusChangedAt, statusChangedBy, statusReason, failedStep, at, identity);
+  }
+
   /** The only two changes that record who and why: one status to its opposite. */
   private Tenant change(
       TenantStatus from, TenantStatus to, String action, String by, String reason, Instant now) {
@@ -112,7 +139,7 @@ public record Tenant(
       TenantStatus to, String administrator, String by, String reason, FailedStep step, Instant now) {
     return new Tenant(
         tenantId, identifier, commercialName, timeZone, country, createdAt, to, administrator, now, by, reason,
-        step, now);
+        step, now, visualIdentity);
   }
 
   /** Only what identifies the tenant: the free text of a reason or a name does not reach a log. */
