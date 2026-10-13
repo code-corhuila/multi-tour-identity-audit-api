@@ -168,4 +168,16 @@ class MongoVisualIdentityTest {
       pool.shutdown();
     }
   }
+
+  @Test
+  void I_a_document_written_with_lower_case_colors_can_still_change_status() {
+    Tenant tenant = active(1, "acme-tours");
+    client.getDatabase(url.getDatabase()).getCollection("tenants").updateOne(
+        Filters.eq("_id", tenant.tenantId()),
+        Updates.set("visualIdentity", new Document("primaryColor", "#aabbcc").append("secondaryColor", "#ddeeff")));
+    Tenant read = tenants.findById(tenant.tenantId()).orElseThrow();
+    Tenant off = read.inactivate("platform-admin", "unpaid", NOW.plusSeconds(120));
+    tenants.update(read, off, List.of());
+    assertThat(tenants.findById(tenant.tenantId()).orElseThrow().status()).isEqualTo(TenantStatus.INACTIVE);
+  }
 }
