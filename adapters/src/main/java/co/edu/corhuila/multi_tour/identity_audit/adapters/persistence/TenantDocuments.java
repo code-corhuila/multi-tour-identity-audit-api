@@ -5,6 +5,7 @@ import co.edu.corhuila.multi_tour.identity_audit.core.tenant.InvalidDataExceptio
 import co.edu.corhuila.multi_tour.identity_audit.core.tenant.Tenant;
 import co.edu.corhuila.multi_tour.identity_audit.core.tenant.TenantEvent;
 import co.edu.corhuila.multi_tour.identity_audit.core.tenant.TenantStatus;
+import co.edu.corhuila.multi_tour.identity_audit.core.tenant.VisualIdentity;
 import com.mongodb.client.model.Filters;
 import java.time.Instant;
 import java.util.Date;
@@ -35,6 +36,7 @@ final class TenantDocuments {
     putIfPresent(document, "statusChangedBy", tenant.statusChangedBy());
     putIfPresent(document, "statusReason", tenant.statusReason());
     putIfPresent(document, "failedStep", tenant.failedStep() == null ? null : tenant.failedStep().name());
+    putIfPresent(document, "visualIdentity", colors(tenant.visualIdentity()));
     return document;
   }
 
@@ -48,7 +50,10 @@ final class TenantDocuments {
         Filters.eq("statusChangedAt", expected.statusChangedAt() == null ? null : Date.from(expected.statusChangedAt())),
         Filters.eq("statusChangedBy", expected.statusChangedBy()),
         Filters.eq("statusReason", expected.statusReason()),
-        Filters.eq("failedStep", expected.failedStep() == null ? null : expected.failedStep().name()));
+        Filters.eq("failedStep", expected.failedStep() == null ? null : expected.failedStep().name()),
+        // a save of the colors moves updatedAt too; both are compared so that neither write overwrites the other
+        sameColor("visualIdentity.primaryColor", color(expected.visualIdentity(), true)),
+        sameColor("visualIdentity.secondaryColor", color(expected.visualIdentity(), false)));
   }
 
   /** An event waiting to be delivered, with the full new state of the tenant as its payload (no credentials). */
@@ -93,7 +98,29 @@ final class TenantDocuments {
         document.getString("statusChangedBy"),
         document.getString("statusReason"),
         document.getString("failedStep") == null ? null : FailedStep.valueOf(document.getString("failedStep")),
-        document.getDate("updatedAt").toInstant());
+        document.getDate("updatedAt").toInstant(),
+        visualIdentity(document.get("visualIdentity", Document.class)));
+  }
+
+  /** The colors as the validator expects them: a sub-document of exactly the two. */
+  static Document colors(VisualIdentity identity) {
+    return identity == null
+        ? null
+        : new Document("primaryColor", identity.primaryColor()).append("secondaryColor", identity.secondaryColor());
+  }
+
+  /** The validator lets a color be written in lower case, and the value object keeps capitals: compare ignoring case. */
+  private static Bson sameColor(String field, String color) {
+    return color == null ? Filters.eq(field, null) : Filters.regex(field, "^" + color + "$", "i");
+  }
+
+  private static String color(VisualIdentity identity, boolean primary) {
+    return identity == null ? null : primary ? identity.primaryColor() : identity.secondaryColor();
+  }
+
+  /** Absent and null both read as none. */
+  private static VisualIdentity visualIdentity(Document colors) {
+    return colors == null ? null : new VisualIdentity(colors.getString("primaryColor"), colors.getString("secondaryColor"));
   }
 
   private static Instant instant(Date date) {
