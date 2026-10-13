@@ -98,9 +98,9 @@ class TenantReadsTest {
   }
 
   @Test
-  void A_the_public_profile_reveals_nothing_beyond_name_identifier_and_status() {
+  void A_the_public_profile_reveals_nothing_beyond_name_identifier_status_and_visual_identity() {
     assertThat(PublicTenantProfile.class.getRecordComponents()).extracting("name")
-        .containsExactly("commercialName", "identifier", "status");
+        .containsExactly("commercialName", "identifier", "status", "visualIdentity");
   }
 
   @Test
