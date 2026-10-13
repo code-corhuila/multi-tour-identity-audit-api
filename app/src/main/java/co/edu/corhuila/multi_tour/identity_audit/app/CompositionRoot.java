@@ -18,6 +18,7 @@ import co.edu.corhuila.multi_tour.identity_audit.core.tenant.InactivateTenant;
 import co.edu.corhuila.multi_tour.identity_audit.core.tenant.ListTenants;
 import co.edu.corhuila.multi_tour.identity_audit.core.tenant.ReactivateTenant;
 import co.edu.corhuila.multi_tour.identity_audit.core.tenant.RegisterPendingTenant;
+import co.edu.corhuila.multi_tour.identity_audit.core.tenant.SetTenantVisualIdentity;
 import co.edu.corhuila.multi_tour.identity_audit.core.tenant.TenantRepository;
 import com.mongodb.ConnectionString;
 import com.mongodb.MongoClientSettings;
@@ -128,6 +129,11 @@ class CompositionRoot {
   @Bean
   GetPublicProfile getPublicProfile(TenantRepository tenants) {
     return new GetPublicProfile(tenants);
+  }
+
+  @Bean
+  SetTenantVisualIdentity setTenantVisualIdentity(TenantRepository tenants, Clock clock) {
+    return new SetTenantVisualIdentity(tenants, clock);
   }
 
   @Bean

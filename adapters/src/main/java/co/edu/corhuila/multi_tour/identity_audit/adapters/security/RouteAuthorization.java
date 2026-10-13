@@ -8,18 +8,22 @@ import org.springframework.web.servlet.HandlerInterceptor;
 
 /**
  * Judges the role before the handler reads the request: {@code /internal/} routes answer only {@code SERVICE}
- * (ADR-004 D5), every other route with a token only the Platform Administrator (RN-IDA-API-01). The role is
+ * (ADR-004 D5), the visual identity of a tenant only its Tenant Administrator (RN-IDA-API-22), every other route
+ * with a token only the Platform Administrator (RN-IDA-API-01). The role is
  * chosen on the path as it is written, while the route that answers is chosen on the normalized one, so a path
  * written in a disguised way (see {@link RouteGuard#isDisguised}) is refused to everyone: no route needs one.
  */
 public final class RouteAuthorization implements HandlerInterceptor {
 
   private static final String INTERNAL = "/api/v1/identity-audit/internal/";
+  private static final String VISUAL_IDENTITY = "/api/v1/identity-audit/tenant/visual-identity";
 
   @Override
   public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
     String uri = request.getRequestURI();
-    Role required = uri.startsWith(INTERNAL) ? Role.SERVICE : Role.PLATFORM_ADMINISTRATOR;
+    Role required = uri.startsWith(INTERNAL)
+        ? Role.SERVICE
+        : uri.equals(VISUAL_IDENTITY) ? Role.TENANT_ADMINISTRATOR : Role.PLATFORM_ADMINISTRATOR;
     if (RouteGuard.isDisguised(uri)
         || !(request.getAttribute(JwtAuthFilter.CALLER) instanceof Caller who)
         || !who.roles().contains(required)) {

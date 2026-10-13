@@ -13,6 +13,7 @@ import co.edu.corhuila.multi_tour.identity_audit.core.tenant.Tenant;
 import co.edu.corhuila.multi_tour.identity_audit.core.tenant.TenantEvent;
 import co.edu.corhuila.multi_tour.identity_audit.core.tenant.TenantRepository;
 import co.edu.corhuila.multi_tour.identity_audit.core.tenant.TenantStatus;
+import co.edu.corhuila.multi_tour.identity_audit.core.tenant.VisualIdentity;
 import com.mongodb.ErrorCategory;
 import com.mongodb.ReadConcern;
 import com.mongodb.TransactionOptions;
@@ -22,6 +23,7 @@ import com.mongodb.client.ClientSession;
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoCollection;
 import com.mongodb.client.model.Sorts;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
@@ -132,5 +134,11 @@ public final class MongoTenantRepository implements TenantRepository {
         return null;
       }, DURABLE);
     }
+  }
+
+  /** shortcut: not written yet, the adapter comes with API-26 of HU-IDA-003; the route answers 500 until then. */
+  @Override
+  public boolean saveVisualIdentity(String tenantId, VisualIdentity identity, Instant now) {
+    throw new UnsupportedOperationException("The visual identity is not stored by this adapter yet");
   }
 }
