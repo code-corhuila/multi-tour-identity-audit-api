@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Identity Audit API
-  version: 0.11.0
+  version: 0.12.0
   description: |
     The contract this service is tested against (ADR-004 D7). It grows with each operation, written before the
     code; the design contract lives in `07-api/contracts/openapi/identity-audit.yaml` of `multi-tour-docs`.
@@ -312,10 +312,50 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '500':
           $ref: '#/components/responses/Error'
+  /api/v1/identity-audit/tenant/visual-identity:
+    put:
+      summary: Set the visual identity of the caller's tenant
+      description: Replaces the two colors of the tenant named by the token's `tenantId` claim; the path and the body name no tenant, so another tenant cannot be asked for. The same body again answers `200` with the same state, and no `Idempotency-Key` is asked because nothing is created. A field that is not declared, a `tenantId` included, or a color that is not `#RRGGBB` is `400` naming the field. Role `TENANT_ADMINISTRATOR`; the Platform Administrator, a `SERVICE` and any other role are `403`.
+      operationId: setTenantVisualIdentity
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VisualIdentityRequest'
+      responses:
+        '200':
+          description: The visual identity is set; the tenant is returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantResponse'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '413':
+          $ref: '#/components/responses/Error'
+        '415':
+          $ref: '#/components/responses/Error'
+        '422':
+          description: The tenant is not active, or it was inactivated while the request was being decided (`BUSINESS_RULE_VIOLATION`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/Error'
   /api/v1/identity-audit/public/tenants/{identifier}:
     get:
       summary: Public profile of a tenant, behind the link /t/{identifier}
-      description: It reveals the name, the identifier and the status, nothing more. A tenant that is unknown, pending or failed is `404`; an inactive one answers `200` with its status. No token.
+      description: It reveals the name, the identifier, the status and the visual identity (`null` while none was set), nothing more. A tenant that is unknown, pending or failed is `404`; an inactive one answers `200` with its status. No token.
       operationId: getPublicTenantProfile
       security: []
       parameters:
@@ -584,6 +624,33 @@ components:
         tenantStatus:
           type: string
           enum: [ACTIVE, INACTIVE]
+        visualIdentity:
+          $ref: '#/components/schemas/VisualIdentity'
+    HexColor:
+      type: string
+      pattern: '^#[0-9A-Fa-f]{6}$'
+      description: A color written `#RRGGBB`; the service keeps it in capitals
+    VisualIdentity:
+      type: object
+      nullable: true
+      description: 'The two colors of a tenant; null when it has not set them and the platform default applies'
+      required: [primaryColor, secondaryColor]
+      additionalProperties: false
+      properties:
+        primaryColor:
+          $ref: '#/components/schemas/HexColor'
+        secondaryColor:
+          $ref: '#/components/schemas/HexColor'
+    VisualIdentityRequest:
+      type: object
+      description: Both colors are always sent (PUT replaces); nothing else can be set
+      required: [primaryColor, secondaryColor]
+      additionalProperties: false
+      properties:
+        primaryColor:
+          $ref: '#/components/schemas/HexColor'
+        secondaryColor:
+          $ref: '#/components/schemas/HexColor'
     OutboxPage:
       type: object
       required: [data, meta]
@@ -657,6 +724,8 @@ components:
         statusChangedBy: {type: string}
         statusReason: {type: string}
         failedStep: {type: string, enum: [CREATE_ACCOUNT, APPLY_STATUS]}
+        visualIdentity:
+          $ref: '#/components/schemas/VisualIdentity'
         createdAt:
           type: string
           format: date-time

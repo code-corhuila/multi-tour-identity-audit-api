@@ -86,7 +86,7 @@ class TenantReadsTest {
 
   @Test
   void A_the_public_profile_shows_name_identifier_and_status_of_an_active_or_inactive_tenant() {
-    assertThat(profile.execute("tenant-2")).isEqualTo(new PublicTenantProfile("Tenant 2", "tenant-2", TenantStatus.ACTIVE));
+    assertThat(profile.execute("tenant-2")).isEqualTo(new PublicTenantProfile("Tenant 2", "tenant-2", TenantStatus.ACTIVE, null));
     assertThat(profile.execute("tenant-1").status()).isEqualTo(TenantStatus.INACTIVE);
   }
 
@@ -98,9 +98,9 @@ class TenantReadsTest {
   }
 
   @Test
-  void A_the_public_profile_reveals_nothing_beyond_name_identifier_and_status() {
+  void A_the_public_profile_reveals_nothing_beyond_name_identifier_status_and_visual_identity() {
     assertThat(PublicTenantProfile.class.getRecordComponents()).extracting("name")
-        .containsExactly("commercialName", "identifier", "status");
+        .containsExactly("commercialName", "identifier", "status", "visualIdentity");
   }
 
   @Test
@@ -128,5 +128,13 @@ class TenantReadsTest {
     var far = list.execute(new ListTenants.Query(null, Integer.MAX_VALUE, 100));
     assertThat(far.data()).isEmpty();
     assertThat(far.total()).isEqualTo(5);
+  }
+
+  @Test
+  void D_the_public_profile_carries_the_visual_identity_when_the_tenant_has_one() {
+    VisualIdentity identity = new VisualIdentity("#AA0000", "#00BB00");
+    tenants.tenants.computeIfPresent(id(2), (k, t) -> t.withVisualIdentity(identity, T0));
+    assertThat(profile.execute("tenant-2").visualIdentity()).isEqualTo(identity);
+    assertThat(profile.execute("tenant-1").visualIdentity()).isNull();
   }
 }

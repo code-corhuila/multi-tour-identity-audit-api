@@ -13,14 +13,14 @@ public record VisualIdentity(String primaryColor, String secondaryColor) {
   private static final Pattern COLOR = Pattern.compile("#[0-9A-Fa-f]{6}");
 
   public VisualIdentity {
-    primaryColor = color(primaryColor, "The primary color");
-    secondaryColor = color(secondaryColor, "The secondary color");
+    primaryColor = color(primaryColor, "primaryColor", "The primary color");
+    secondaryColor = color(secondaryColor, "secondaryColor", "The secondary color");
   }
 
   /** {@code matches} must cover the whole text, and a line break at the end is not covered. */
-  private static String color(String value, String what) {
+  private static String color(String value, String field, String what) {
     if (value == null || !COLOR.matcher(value).matches()) {
-      throw new InvalidDataException(what + " is # and six hexadecimal digits");
+      throw new InvalidDataException(field, what + " is # and six hexadecimal digits");
     }
     return value.toUpperCase(Locale.ROOT);
   }

@@ -18,7 +18,7 @@ public final class GetPublicProfile {
     }
     return tenants.findByIdentifier(identifier)
         .filter(t -> t.status() == TenantStatus.ACTIVE || t.status() == TenantStatus.INACTIVE)
-        .map(t -> new PublicTenantProfile(t.commercialName(), t.identifier(), t.status()))
+        .map(t -> new PublicTenantProfile(t.commercialName(), t.identifier(), t.status(), t.visualIdentity()))
         .orElseThrow(() -> new TenantNotFoundException("with that identifier"));
   }
 }

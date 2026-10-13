@@ -18,13 +18,14 @@ public record TenantResponse(
     String statusReason,
     String failedStep,
     Instant createdAt,
-    Instant updatedAt) {
+    Instant updatedAt,
+    VisualIdentityBody visualIdentity) {
 
   static TenantResponse of(Tenant tenant) {
     return new TenantResponse(
         tenant.tenantId(), tenant.identifier(), tenant.commercialName(), tenant.status().name(), tenant.timeZone(),
         tenant.country(), tenant.firstAdministratorMembershipId(), tenant.statusChangedAt(), tenant.statusChangedBy(),
         tenant.statusReason(), tenant.failedStep() == null ? null : tenant.failedStep().name(), tenant.createdAt(),
-        tenant.updatedAt());
+        tenant.updatedAt(), VisualIdentityBody.of(tenant.visualIdentity()));
   }
 }

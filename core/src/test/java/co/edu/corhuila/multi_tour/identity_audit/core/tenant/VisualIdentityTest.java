@@ -11,9 +11,11 @@ class VisualIdentityTest {
   void D_color_must_be_hash_and_six_hex_digits() {
     for (String bad : new String[] {"1A2B3C", "#1A2B3", "#1A2B3CD", "#1A2B3G", "#1A2B3C\n", "#1A2B3C ", "", " ", null}) {
       assertThatThrownBy(() -> new VisualIdentity(bad, "#000000")).as("primary %s", bad)
-          .isInstanceOf(InvalidDataException.class).hasMessageContaining("primary");
+          .isInstanceOfSatisfying(InvalidDataException.class, e -> assertThat(e.field()).isEqualTo("primaryColor"))
+          .hasMessageContaining("primary");
       assertThatThrownBy(() -> new VisualIdentity("#000000", bad)).as("secondary %s", bad)
-          .isInstanceOf(InvalidDataException.class).hasMessageContaining("secondary");
+          .isInstanceOfSatisfying(InvalidDataException.class, e -> assertThat(e.field()).isEqualTo("secondaryColor"))
+          .hasMessageContaining("secondary");
     }
   }
 

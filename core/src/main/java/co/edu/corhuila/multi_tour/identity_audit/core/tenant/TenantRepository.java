@@ -1,5 +1,6 @@
 package co.edu.corhuila.multi_tour.identity_audit.core.tenant;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -41,4 +42,11 @@ public interface TenantRepository {
    * @throws ConcurrentChangeException if another request changed it first
    */
   void update(Tenant expected, Tenant next, List<TenantEvent> events);
+
+  /**
+   * Stores the visual identity of the tenant and the time of the change, only if the tenant exists and is
+   * active, and answers whether it did. It is one write on one document, so a tenant that was inactivated
+   * after it was read is not changed; the caller decides what a {@code false} means.
+   */
+  boolean saveVisualIdentity(String tenantId, VisualIdentity identity, Instant now);
 }
