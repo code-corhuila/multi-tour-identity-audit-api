@@ -633,8 +633,7 @@ components:
     VisualIdentity:
       type: object
       nullable: true
-      description: The two colors of a tenant; 
-ull when it has not set them and the platform's default applies
+      description: 'The two colors of a tenant; null when it has not set them and the platform default applies'
       required: [primaryColor, secondaryColor]
       additionalProperties: false
       properties:
