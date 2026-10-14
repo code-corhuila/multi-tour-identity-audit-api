@@ -1,0 +1,26 @@
+# This service only. multi-tour-infra-postgres includes this file to compose the platform (Annex J, J.7).
+# It defines no database and no volume. `expose`, not `ports`: only the gateway is reachable from the host
+# (norm 5.6.1). The public key of the security microservice comes from the variables of the environment;
+# without it, or without the address of the database, the service stops at start with a message that names it.
+services:
+  identity-audit-api:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    image: multi-tour-identity-audit-api:0.1.0
+    environment:
+      PORT: "8082"
+      JWT_PUBLIC_KEY: ${JWT_PUBLIC_KEY:-}
+      # optional: when set, a token must carry this issuer and audience; empty means those claims are not read
+      JWT_ISSUER: ${JWT_ISSUER:-}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:-}
+      # the address of the database with the user identity_audit_app (never the administrator); empty stops the service at start
+      MONGODB_URI: ${MONGODB_URI:-}
+    expose: ["8082"]
+    read_only: true
+    tmpfs: [/tmp]
+    networks: [platform]
+
+networks:
+  platform:
+    external: true

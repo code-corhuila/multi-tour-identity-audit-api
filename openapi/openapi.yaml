@@ -1,0 +1,734 @@
+openapi: 3.0.3
+info:
+  title: Identity Audit API
+  version: 0.12.0
+  description: |
+    The contract this service is tested against (ADR-004 D7). It grows with each operation, written before the
+    code; the design contract lives in `07-api/contracts/openapi/identity-audit.yaml` of `multi-tour-docs`.
+    The paths are the real ones, with the prefix `/api/v1/identity-audit` that the gateway routes to this
+    service. Every error uses the single envelope below. Routes under `/internal/` answer only the role `SERVICE`.
+paths:
+  /health:
+    get:
+      summary: Health check
+      security: []
+      responses:
+        '200':
+          description: The service is up
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, timestamp, dependencies]
+                properties:
+                  status:
+                    type: string
+                    enum: [ok]
+                  timestamp:
+                    type: string
+                    format: date-time
+                  dependencies:
+                    type: object
+                    required: [database]
+                    properties:
+                      database:
+                        type: string
+                        enum: [ok, down]
+                        description: Whether the database answered a ping within 2 s; a database that is down does not make the answer a 503
+  /api/v1/identity-audit/internal/tenants:
+    post:
+      summary: Step 1 of onboard-tenant, create the tenant as pending
+      description: A repeat of the same `Idempotency-Key` answers `200` with the first tenant, whatever the body says now. Role `SERVICE`.
+      operationId: registerPendingTenant
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterTenantRequest'
+      responses:
+        '201':
+          description: Tenant created as pending
+          headers:
+            Location:
+              description: Path of the created tenant
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantResponse'
+        '200':
+          description: Repeated request with the same `Idempotency-Key`; the tenant already created, as it is now
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantResponse'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '413':
+          $ref: '#/components/responses/Error'
+        '415':
+          $ref: '#/components/responses/Error'
+        '422':
+          description: The identifier is used by a live tenant; the message names it
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/Error'
+  /api/v1/identity-audit/internal/tenants/{tenantId}/complete-onboarding:
+    post:
+      summary: Step 3 of onboard-tenant, record the first Administrator and apply the initial status
+      description: A pending tenant becomes `ACTIVE` or `INACTIVE` and `TenantCreated` goes to the outbox in the same transaction; the same Administrator again answers `200`. Role `SERVICE`.
+      operationId: completeTenantOnboarding
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/TenantIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompleteOnboardingRequest'
+      responses:
+        '200':
+          description: Onboarding completed, or already completed with this Administrator
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantResponse'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '413':
+          $ref: '#/components/responses/Error'
+        '415':
+          $ref: '#/components/responses/Error'
+        '422':
+          description: The tenant is not pending (`INVALID_STATUS_TRANSITION`), or the change lost the race twice in a row (`BUSINESS_RULE_VIOLATION`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/Error'
+  /api/v1/identity-audit/internal/tenants/{tenantId}/fail-onboarding:
+    post:
+      summary: Compensation of onboard-tenant, mark the pending tenant failed
+      description: A pending tenant becomes `FAILED` with the step that failed, freeing its identifier; the same step again answers `200`. Role `SERVICE`.
+      operationId: failTenantOnboarding
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/TenantIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FailOnboardingRequest'
+      responses:
+        '200':
+          description: The tenant is marked failed, or already was with this step
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantResponse'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '413':
+          $ref: '#/components/responses/Error'
+        '415':
+          $ref: '#/components/responses/Error'
+        '422':
+          description: The tenant is not pending (`INVALID_STATUS_TRANSITION`), or the change lost the race twice in a row (`BUSINESS_RULE_VIOLATION`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/Error'
+  /api/v1/identity-audit/tenants:
+    get:
+      summary: List the tenants, newest first
+      description: A `limit` outside 1 to 100, a `page` below 1, a status that does not exist or a filter that is not declared is `400`. Role `PLATFORM_ADMINISTRATOR`.
+      operationId: listTenants
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema: {type: integer, minimum: 1, default: 1}
+        - name: limit
+          in: query
+          schema: {type: integer, minimum: 1, maximum: 100, default: 20}
+        - name: status
+          in: query
+          schema: {type: string, enum: [PENDING, ACTIVE, INACTIVE, FAILED]}
+      responses:
+        '200':
+          description: One page of tenants
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantPage'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+  /api/v1/identity-audit/tenants/{tenantId}:
+    get:
+      summary: Get a tenant, whatever its status
+      description: Role `PLATFORM_ADMINISTRATOR`; a tenant user is refused with `403`.
+      operationId: getTenant
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/TenantIdPath'
+      responses:
+        '200':
+          description: The tenant
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantResponse'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+  /api/v1/identity-audit/tenants/{tenantId}/inactivate:
+    post:
+      summary: Inactivate an active tenant, with a reason
+      description: The reason is required. A tenant that is not active, a repeat included, is `422 INVALID_STATUS_TRANSITION`. Writes `TenantInactivated` to the outbox in the same transaction. Role `PLATFORM_ADMINISTRATOR`.
+      operationId: inactivateTenant
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/TenantIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransitionReasonRequest'
+      responses:
+        '200':
+          description: Tenant inactivated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantResponse'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '413':
+          $ref: '#/components/responses/Error'
+        '415':
+          $ref: '#/components/responses/Error'
+        '422':
+          description: The tenant is not active (`INVALID_STATUS_TRANSITION`), or the change lost the race twice in a row (`BUSINESS_RULE_VIOLATION`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/Error'
+  /api/v1/identity-audit/tenants/{tenantId}/reactivate:
+    post:
+      summary: Reactivate an inactive tenant, with a reason
+      description: The reason is required. A tenant that is not inactive, a repeat included, is `422 INVALID_STATUS_TRANSITION`. Writes `TenantReactivated` to the outbox in the same transaction. Role `PLATFORM_ADMINISTRATOR`.
+      operationId: reactivateTenant
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/TenantIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransitionReasonRequest'
+      responses:
+        '200':
+          description: Tenant reactivated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantResponse'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '413':
+          $ref: '#/components/responses/Error'
+        '415':
+          $ref: '#/components/responses/Error'
+        '422':
+          description: The tenant is not inactive (`INVALID_STATUS_TRANSITION`), or the change lost the race twice in a row (`BUSINESS_RULE_VIOLATION`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/Error'
+  /api/v1/identity-audit/tenant/visual-identity:
+    put:
+      summary: Set the visual identity of the caller's tenant
+      description: Replaces the two colors of the tenant named by the token's `tenantId` claim; the path and the body name no tenant, so another tenant cannot be asked for. The same body again answers `200` with the same state, and no `Idempotency-Key` is asked because nothing is created. A field that is not declared, a `tenantId` included, or a color that is not `#RRGGBB` is `400` naming the field. Role `TENANT_ADMINISTRATOR`; the Platform Administrator, a `SERVICE` and any other role are `403`.
+      operationId: setTenantVisualIdentity
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VisualIdentityRequest'
+      responses:
+        '200':
+          description: The visual identity is set; the tenant is returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantResponse'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '413':
+          $ref: '#/components/responses/Error'
+        '415':
+          $ref: '#/components/responses/Error'
+        '422':
+          description: The tenant is not active, or it was inactivated while the request was being decided (`BUSINESS_RULE_VIOLATION`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/Error'
+  /api/v1/identity-audit/public/tenants/{identifier}:
+    get:
+      summary: Public profile of a tenant, behind the link /t/{identifier}
+      description: It reveals the name, the identifier, the status and the visual identity (`null` while none was set), nothing more. A tenant that is unknown, pending or failed is `404`; an inactive one answers `200` with its status. No token.
+      operationId: getPublicTenantProfile
+      security: []
+      parameters:
+        - name: identifier
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[a-z0-9-]{1,40}$'
+      responses:
+        '200':
+          description: The public profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantPublicProfile'
+        '401':
+          description: The path is not written like an identifier (capitals, encoded characters, more than 40), so it is not public and needs a token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+  /api/v1/identity-audit/internal/outbox:
+    get:
+      summary: Read the events waiting, for job 7
+      description: The pending events that are due, across tenants, the one due for longest first. A `limit` outside 1 to 100, a status other than `PENDING` and a filter that is not declared are `400`. Role `SERVICE`.
+      operationId: listOutboxEvents
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema: {type: integer, minimum: 1, default: 1}
+        - name: limit
+          in: query
+          schema: {type: integer, minimum: 1, maximum: 100, default: 20}
+        - name: status
+          in: query
+          schema: {type: string, enum: [PENDING], default: PENDING}
+      responses:
+        '200':
+          description: One page of events
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OutboxPage'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+  /api/v1/identity-audit/internal/outbox/{eventId}/published:
+    post:
+      summary: Mark an event delivered
+      description: Only after every consumer answered `201` or `200`. A repeat answers `200` with the event as it is. Role `SERVICE`.
+      operationId: markOutboxEventPublished
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/EventIdPath'
+      responses:
+        '200':
+          description: The event is published
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OutboxEvent'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '413':
+          $ref: '#/components/responses/Error'
+        '422':
+          description: The change lost the race twice in a row (`BUSINESS_RULE_VIOLATION`); the caller sends it again
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/Error'
+  /api/v1/identity-audit/internal/outbox/{eventId}/attempts:
+    post:
+      summary: Record a failed delivery
+      description: Counts the attempt, keeps the error and moves `nextAttemptAt` (the wait doubles from 5 s up to 15 min); the 20th attempt marks the event `FAILED`. An event that is no longer pending is answered as it is. Role `SERVICE`.
+      operationId: recordOutboxEventAttempt
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/EventIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OutboxAttemptRequest'
+      responses:
+        '200':
+          description: The attempt is recorded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OutboxEvent'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '413':
+          $ref: '#/components/responses/Error'
+        '415':
+          $ref: '#/components/responses/Error'
+        '422':
+          description: The change lost the race twice in a row (`BUSINESS_RULE_VIOLATION`); the caller sends it again
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/Error'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema:
+        type: string
+        minLength: 8
+        maxLength: 128
+        pattern: '^\S+$'
+    TenantIdPath:
+      name: tenantId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    EventIdPath:
+      name: eventId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  responses:
+    Error:
+      description: An error in the single envelope; the code says which
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+  schemas:
+    ErrorResponse:
+      type: object
+      required: [error, message, traceId]
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        details:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              message:
+                type: string
+        traceId:
+          type: string
+    RegisterTenantRequest:
+      type: object
+      required: [identifier, commercialName, timeZone, country]
+      additionalProperties: false
+      properties:
+        identifier:
+          type: string
+          minLength: 3
+          maxLength: 40
+          pattern: '^[a-z0-9]+(-[a-z0-9]+)*$'
+        commercialName:
+          type: string
+          minLength: 1
+          maxLength: 120
+        timeZone:
+          type: string
+          maxLength: 64
+        country:
+          type: string
+          pattern: '^[A-Z]{2}$'
+    CompleteOnboardingRequest:
+      type: object
+      required: [firstAdministratorMembershipId, initialStatus]
+      additionalProperties: false
+      properties:
+        firstAdministratorMembershipId:
+          type: string
+          format: uuid
+        initialStatus:
+          type: string
+          enum: [ACTIVE, INACTIVE]
+    FailOnboardingRequest:
+      type: object
+      required: [failedStep]
+      additionalProperties: false
+      properties:
+        failedStep:
+          type: string
+          enum: [CREATE_ACCOUNT, APPLY_STATUS]
+    TenantPage:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/TenantResponse'
+        meta:
+          type: object
+          required: [page, limit, total, totalPages]
+          properties:
+            page: {type: integer, minimum: 1}
+            limit: {type: integer, minimum: 1, maximum: 100}
+            total: {type: integer, minimum: 0}
+            totalPages: {type: integer, minimum: 0}
+    TransitionReasonRequest:
+      type: object
+      required: [reason]
+      additionalProperties: false
+      properties:
+        reason:
+          type: string
+          description: Trimmed; no control character, new lines included; at most 500 UTF-16 units
+          minLength: 1
+          maxLength: 500
+    TenantPublicProfile:
+      type: object
+      required: [identifier, commercialName, tenantStatus]
+      additionalProperties: false
+      properties:
+        identifier:
+          type: string
+        commercialName:
+          type: string
+        tenantStatus:
+          type: string
+          enum: [ACTIVE, INACTIVE]
+        visualIdentity:
+          $ref: '#/components/schemas/VisualIdentity'
+    HexColor:
+      type: string
+      pattern: '^#[0-9A-Fa-f]{6}$'
+      description: A color written `#RRGGBB`; the service keeps it in capitals
+    VisualIdentity:
+      type: object
+      nullable: true
+      description: 'The two colors of a tenant; null when it has not set them and the platform default applies'
+      required: [primaryColor, secondaryColor]
+      additionalProperties: false
+      properties:
+        primaryColor:
+          $ref: '#/components/schemas/HexColor'
+        secondaryColor:
+          $ref: '#/components/schemas/HexColor'
+    VisualIdentityRequest:
+      type: object
+      description: Both colors are always sent (PUT replaces); nothing else can be set
+      required: [primaryColor, secondaryColor]
+      additionalProperties: false
+      properties:
+        primaryColor:
+          $ref: '#/components/schemas/HexColor'
+        secondaryColor:
+          $ref: '#/components/schemas/HexColor'
+    OutboxPage:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/OutboxEvent'
+        meta:
+          type: object
+          required: [page, limit, total, totalPages]
+          properties:
+            page: {type: integer, minimum: 1}
+            limit: {type: integer, minimum: 1, maximum: 100}
+            total: {type: integer, minimum: 0}
+            totalPages: {type: integer, minimum: 0}
+    OutboxAttemptRequest:
+      type: object
+      required: [error]
+      additionalProperties: false
+      properties:
+        error:
+          type: string
+          description: Trimmed; no control character, new lines included; at most 1000 UTF-16 units
+          minLength: 1
+          maxLength: 1000
+    OutboxEvent:
+      type: object
+      description: An event waiting to be delivered, with the envelope of ADR-004 D4
+      required: [eventId, eventType, eventVersion, aggregateId, payload, correlationId, occurredAt, status, attempts, nextAttemptAt]
+      properties:
+        eventId: {type: string, format: uuid}
+        eventType: {type: string}
+        eventVersion: {type: integer, minimum: 1}
+        tenantId: {type: string, format: uuid}
+        aggregateId: {type: string, format: uuid}
+        actorId: {type: string}
+        reason: {type: string}
+        payload:
+          type: object
+          description: The full new state of the aggregate; never a credential
+        correlationId: {type: string}
+        occurredAt: {type: string, format: date-time}
+        publishedAt: {type: string, format: date-time}
+        status: {type: string, enum: [PENDING, PUBLISHED, FAILED]}
+        attempts: {type: integer, minimum: 0}
+        lastError: {type: string}
+        nextAttemptAt: {type: string, format: date-time}
+    TenantResponse:
+      type: object
+      required: [tenantId, identifier, commercialName, tenantStatus, timeZone, country, createdAt]
+      properties:
+        tenantId:
+          type: string
+          format: uuid
+        identifier:
+          type: string
+        commercialName:
+          type: string
+        tenantStatus:
+          type: string
+          enum: [PENDING, ACTIVE, INACTIVE, FAILED]
+        timeZone:
+          type: string
+        country:
+          type: string
+        firstAdministratorMembershipId:
+          type: string
+          format: uuid
+        statusChangedAt: {type: string, format: date-time}
+        statusChangedBy: {type: string}
+        statusReason: {type: string}
+        failedStep: {type: string, enum: [CREATE_ACCOUNT, APPLY_STATUS]}
+        visualIdentity:
+          $ref: '#/components/schemas/VisualIdentity'
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
