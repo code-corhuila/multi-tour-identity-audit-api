@@ -10,6 +10,6 @@ public record SessionCutoff(String accountId, String tenantId, Instant revokedFr
 
   /** The cutoff after an event that revokes from {@code candidate}; it never moves back. */
   public SessionCutoff moveTo(Instant candidate, Instant now) {
-    return this;
+    return candidate.isAfter(revokedFrom) ? new SessionCutoff(accountId, tenantId, candidate, now) : this;
   }
 }

@@ -50,9 +50,34 @@ public final class ApplySessionRevocation {
     }
   }
 
-  public ApplySessionRevocation(SessionCutoffs cutoffs, Clock clock) {}
+  private final SessionCutoffs cutoffs;
+  private final Clock clock;
 
+  public ApplySessionRevocation(SessionCutoffs cutoffs, Clock clock) {
+    this.cutoffs = cutoffs;
+    this.clock = clock;
+  }
+
+  /** A race decides again once, as the other changes of the service do. */
   public Outcome execute(Command command) {
-    return Outcome.UNCHANGED;
+    Instant from = command.revokedFromInstant();
+    try {
+      return attempt(command, from);
+    } catch (ConcurrentChangeException raced) {
+      return attempt(command, from);
+    }
+  }
+
+  private Outcome attempt(Command command, Instant from) {
+    Instant now = clock.instant();
+    Optional<SessionCutoff> current = cutoffs.find(command.accountId());
+    if (current.isPresent() && current.get().tenantId() != null && !current.get().tenantId().equals(command.tenantId())) {
+      throw new InvalidDataException("tenantId", "is not the tenant of the account");
+    }
+    SessionCutoff next = current
+        .map(kept -> kept.moveTo(from, now))
+        .orElseGet(() -> new SessionCutoff(command.accountId(), command.tenantId(), from, now));
+    boolean first = cutoffs.record(command.eventId(), current.orElse(null), next, now);
+    return first && !next.equals(current.orElse(null)) ? Outcome.APPLIED : Outcome.UNCHANGED;
   }
 }
