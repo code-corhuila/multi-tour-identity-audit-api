@@ -48,4 +48,9 @@ class TokenCutoffLookupFailsTest extends ShellTest {
     assertThat(answer.jsonPath().getString("error")).isEqualTo("INTERNAL_ERROR");
     assertThat(answer.asString()).as("no detail of the fault reaches the caller").doesNotContain("does not answer");
   }
+
+  @Test
+  void C_the_routes_that_need_no_token_never_look_up_a_cutoff() {
+    assertThat(given().get("/health").statusCode()).as("the health check must not depend on the lookup").isEqualTo(200);
+  }
 }

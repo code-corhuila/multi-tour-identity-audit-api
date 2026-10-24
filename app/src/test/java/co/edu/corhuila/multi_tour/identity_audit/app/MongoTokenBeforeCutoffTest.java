@@ -78,6 +78,20 @@ class MongoTokenBeforeCutoffTest extends ShellTest {
   }
 
   @Test
+  void C_the_second_before_the_cutoff_is_refused_on_every_protected_route_and_a_later_cutoff_moves_forward() {
+    revokeFrom(ACCOUNT, R);
+    String old = Tokens.valid(admin(ACCOUNT, R.minusSeconds(1)));
+
+    for (String route : List.of(PROTECTED, "/api/v1/identity-audit/tenants", "/api/v1/identity-audit/tenants/" + TENANT)) {
+      assertThat(given().header("Authorization", "Bearer " + old).get(route).statusCode()).as(route).isEqualTo(401);
+    }
+
+    revokeFrom(ACCOUNT, R.plusSeconds(120));
+    assertThat(call(admin(ACCOUNT, R.plusSeconds(60))).statusCode()).as("a token that passed before is refused by the newer cutoff").isEqualTo(401);
+    assertThat(call(admin(ACCOUNT, R.plusSeconds(180))).statusCode()).isEqualTo(404);
+  }
+
+  @Test
   void C_a_token_without_an_issue_time_is_refused_only_when_its_account_has_a_cutoff() {
     assertThat(call(admin(ACCOUNT, null)).statusCode()).as("no cutoff, nothing to compare").isEqualTo(404);
 
