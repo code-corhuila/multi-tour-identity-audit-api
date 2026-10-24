@@ -4,6 +4,11 @@ package co.edu.corhuila.multi_tour.identity_audit.core.tenant;
 public class ConcurrentChangeException extends RuntimeException {
 
   public ConcurrentChangeException(String tenantId) {
-    super("The tenant " + tenantId + " changed while this request was deciding");
+    this("tenant", tenantId);
+  }
+
+  /** Another kind of record that changed while the request was deciding, such as the session cutoff of an account. */
+  public ConcurrentChangeException(String what, String id) {
+    super("The " + what + " " + id + " changed while this request was deciding");
   }
 }
