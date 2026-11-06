@@ -93,8 +93,8 @@ class CompositionRoot {
   }
 
   @Bean
-  ApplySessionRevocation applySessionRevocation(SessionCutoffs cutoffs, Clock clock) {
-    return new ApplySessionRevocation(cutoffs, clock);
+  ApplySessionRevocation applySessionRevocation(SessionCutoffs cutoffs, Clock clock, IdGenerator ids) {
+    return new ApplySessionRevocation(cutoffs, clock, ids);
   }
 
   @Bean

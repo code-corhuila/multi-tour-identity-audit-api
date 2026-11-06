@@ -1,6 +1,9 @@
 package co.edu.corhuila.multi_tour.identity_audit.core.session;
 
+import co.edu.corhuila.multi_tour.identity_audit.core.audit.AuditRecord;
+import co.edu.corhuila.multi_tour.identity_audit.core.audit.PlatformEvent;
 import co.edu.corhuila.multi_tour.identity_audit.core.tenant.ConcurrentChangeException;
+import co.edu.corhuila.multi_tour.identity_audit.core.tenant.IdGenerator;
 import co.edu.corhuila.multi_tour.identity_audit.core.tenant.InvalidDataException;
 import java.time.Clock;
 import java.time.Instant;
@@ -52,23 +55,27 @@ public final class ApplySessionRevocation {
 
   private final SessionCutoffs cutoffs;
   private final Clock clock;
+  private final IdGenerator ids;
 
-  public ApplySessionRevocation(SessionCutoffs cutoffs, Clock clock) {
+  public ApplySessionRevocation(SessionCutoffs cutoffs, Clock clock, IdGenerator ids) {
     this.cutoffs = cutoffs;
     this.clock = clock;
+    this.ids = ids;
   }
 
   /** A race decides again once, as the other changes of the service do. */
-  public Outcome execute(Command command) {
+  public Outcome execute(Command command, PlatformEvent event) {
     Instant from = command.revokedFromInstant();
+    // built once, before any write, so a race that decides again keeps the same record id and an event that cannot make one writes nothing
+    AuditRecord audit = event.toAuditRecord(ids.newId());
     try {
-      return attempt(command, from);
+      return attempt(command, from, audit);
     } catch (ConcurrentChangeException raced) {
-      return attempt(command, from);
+      return attempt(command, from, audit);
     }
   }
 
-  private Outcome attempt(Command command, Instant from) {
+  private Outcome attempt(Command command, Instant from, AuditRecord audit) {
     Instant now = clock.instant();
     Optional<SessionCutoff> current = cutoffs.find(command.accountId());
     if (current.isPresent() && current.get().tenantId() != null && !current.get().tenantId().equals(command.tenantId())) {
@@ -77,7 +84,7 @@ public final class ApplySessionRevocation {
     SessionCutoff next = current
         .map(kept -> kept.moveTo(from, now))
         .orElseGet(() -> new SessionCutoff(command.accountId(), command.tenantId(), from, now));
-    boolean first = cutoffs.record(command.eventId(), current.orElse(null), next, now);
+    boolean first = cutoffs.record(command.eventId(), current.orElse(null), next, now, audit);
     return first && !next.equals(current.orElse(null)) ? Outcome.APPLIED : Outcome.UNCHANGED;
   }
 }
