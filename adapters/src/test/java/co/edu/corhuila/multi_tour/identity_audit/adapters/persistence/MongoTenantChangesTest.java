@@ -46,7 +46,7 @@ class MongoTenantChangesTest {
   void aCleanDatabase() {
     url = new ConnectionString(System.getenv("TEST_DATABASE_URL"));
     client = MongoClients.create(url);
-    for (String collection : List.of("tenants", "outbox_events", "idempotency_keys")) {
+    for (String collection : List.of("tenants", "outbox_events", "idempotency_keys", "audit_records")) {
       client.getDatabase(url.getDatabase()).getCollection(collection).deleteMany(new Document());
     }
     tenants = new MongoTenantRepository(client, url.getDatabase());
@@ -99,6 +99,59 @@ class MongoTenantChangesTest {
   }
 
   @Test
+  void I_a_tenant_change_and_its_audit_record_are_written_together() {
+    Tenant pending = stored(1, "acme-tours");
+    Tenant active = pending.completeOnboarding(MEMBERSHIP, TenantStatus.ACTIVE, LATER);
+    tenants.update(pending, active, List.of(event(1, TenantEventType.TENANT_CREATED, active, LATER)));
+    Tenant inactive = active.inactivate("platform-admin", "unpaid", LATER.plusSeconds(1));
+    tenants.update(active, inactive, List.of(event(2, TenantEventType.TENANT_INACTIVATED, inactive, inactive.updatedAt())));
+    Tenant again = inactive.reactivate("platform-admin", "paid", LATER.plusSeconds(2));
+    tenants.update(inactive, again, List.of(event(3, TenantEventType.TENANT_REACTIVATED, again, again.updatedAt())));
+
+    assertThat(count("audit_records")).as("one record per event").isEqualTo(3);
+    var audits = client.getDatabase(url.getDatabase()).getCollection("audit_records");
+    Document off = audits.find(new Document("action", "TENANT_INACTIVATED")).first();
+    assertThat(off.getString("tenantId")).isEqualTo(pending.tenantId());
+    assertThat(off.getString("actorId")).isEqualTo("onboard-tenant");
+    assertThat(off.getString("affectedRecordId")).isEqualTo("tenants/" + pending.tenantId());
+    assertThat(off.getString("reason")).isEqualTo("unpaid");
+    assertThat(off.get("previousValue", Document.class).getString("tenantStatus")).isEqualTo("ACTIVE");
+    assertThat(off.get("newValue", Document.class).getString("tenantStatus")).isEqualTo("INACTIVE");
+    assertThat(off.getString("eventId")).isEqualTo("00000000-0000-4000-8000-0000000e0002");
+    Document created = audits.find(new Document("action", "TENANT_CREATED")).first();
+    assertThat(created.get("previousValue", Document.class).getString("tenantStatus")).isEqualTo("PENDING");
+    assertThat(created.getString("_id")).as("its own id, not the id of the event").isNotEqualTo(created.getString("eventId"));
+    Document on = audits.find(new Document("action", "TENANT_REACTIVATED")).first();
+    assertThat(on.getString("reason")).isEqualTo("paid");
+    assertThat(on.getString("actorId")).isEqualTo("onboard-tenant");
+    assertThat(on.get("previousValue", Document.class).getString("tenantStatus")).isEqualTo("INACTIVE");
+  }
+
+  @Test
+  void I_a_record_that_cannot_be_kept_leaves_neither_the_tenant_change_nor_the_event() {
+    Tenant pending = stored(1, "acme-tours");
+    Tenant done = pending.completeOnboarding(MEMBERSHIP, TenantStatus.ACTIVE, LATER);
+    TenantEvent created = event(1, TenantEventType.TENANT_CREATED, done, LATER);
+    // a record of that very event is already there, so the unique index of the event id refuses the new one
+    client.getDatabase(url.getDatabase()).getCollection("audit_records").insertOne(MongoAuditRecordRepository.toDocument(
+        created.toAuditRecord("00000000-0000-4000-8000-000000000999", pending)));
+
+    assertThatThrownBy(() -> tenants.update(pending, done, List.of(created))).isInstanceOf(com.mongodb.MongoException.class);
+
+    assertThat(tenants.findById(pending.tenantId())).as("the tenant did not change").contains(pending);
+    assertThat(count("outbox_events")).as("and no event was left").isZero();
+    assertThat(count("audit_records")).as("only the one that was there").isEqualTo(1);
+  }
+
+  @Test
+  void I_a_failed_onboarding_without_an_event_leaves_no_audit_record() {
+    Tenant other = stored(2, "other-one");
+    tenants.update(other, other.failOnboarding(FailedStep.CREATE_ACCOUNT, LATER), List.of());
+
+    assertThat(count("audit_records")).isZero();
+  }
+
+  @Test
   void I_every_status_with_its_fields_goes_through_the_validator_and_comes_back_equal() {
     Tenant pending = stored(1, "acme-tours");
     Tenant active = pending.completeOnboarding(MEMBERSHIP, TenantStatus.ACTIVE, LATER);
@@ -126,6 +179,7 @@ class MongoTenantChangesTest {
         .isInstanceOf(ConcurrentChangeException.class);
     assertThat(tenants.findById(pending.tenantId())).contains(done);
     assertThat(count("outbox_events")).isEqualTo(1);
+    assertThat(count("audit_records")).as("the refused change leaves no record either").isEqualTo(1);
   }
 
   @Test
