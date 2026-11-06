@@ -1,6 +1,9 @@
 package co.edu.corhuila.multi_tour.identity_audit.core.tenant;
 
+import co.edu.corhuila.multi_tour.identity_audit.core.audit.AuditAction;
+import co.edu.corhuila.multi_tour.identity_audit.core.audit.AuditRecord;
 import java.time.Instant;
+import java.util.Map;
 
 /**
  * An event waiting to be told to the rest of the platform, with the full new state of the tenant so a consumer
@@ -30,6 +33,16 @@ public record TenantEvent(
         || correlationId.chars().anyMatch(c -> Character.isWhitespace(c) || Character.isISOControl(c))) {
       throw new InvalidDataException("An event has a correlation id of at most 128 characters without spaces");
     }
+  }
+
+  /**
+   * The audit record of this change (PDR section 17): who did it, why, and the status of the tenant before and after. It
+   * has the id of the event, so the record and the event that tells the platform are one fact seen twice.
+   */
+  public AuditRecord toAuditRecord(String auditRecordId, Tenant previous) {
+    return new AuditRecord(auditRecordId, eventId, tenant.tenantId(), actor, AuditAction.of(type.eventType()),
+        "tenants/" + tenant.tenantId(), tenant.statusReason(), Map.of("tenantStatus", previous.status().name()),
+        Map.of("tenantStatus", tenant.status().name()), null, null, occurredAt);
   }
 
   @Override
