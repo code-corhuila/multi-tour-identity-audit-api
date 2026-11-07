@@ -8,6 +8,7 @@ import co.edu.corhuila.multi_tour.identity_audit.core.tenant.InvalidDataExceptio
 import java.time.Clock;
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.regex.Pattern;
 
@@ -21,6 +22,7 @@ public final class ApplySessionRevocation {
   /** {@code APPLIED} when the cutoff was set or moved; {@code UNCHANGED} for a repeat of the event id or an event older than the cutoff. */
   public enum Outcome { APPLIED, UNCHANGED }
 
+  /** {@code tenantId} is {@code null} for an account of the Platform Administrator, which belongs to no tenant (ADR-004 D4). */
   public record Command(String eventId, String eventType, String tenantId, String aggregateId, String accountId, String revokedFrom) {
 
     public Command {
@@ -28,7 +30,9 @@ public final class ApplySessionRevocation {
         throw new InvalidDataException("eventType", "must be " + EVENT_TYPE);
       }
       require("eventId", eventId);
-      require("tenantId", tenantId);
+      if (tenantId != null) {
+        require("tenantId", tenantId);
+      }
       require("accountId", accountId);
       if (!accountId.equals(aggregateId)) {
         throw new InvalidDataException("aggregateId", "must be the account of the payload");
@@ -78,7 +82,8 @@ public final class ApplySessionRevocation {
   private Outcome attempt(Command command, Instant from, AuditRecord audit) {
     Instant now = clock.instant();
     Optional<SessionCutoff> current = cutoffs.find(command.accountId());
-    if (current.isPresent() && current.get().tenantId() != null && !current.get().tenantId().equals(command.tenantId())) {
+    // an account belongs to one tenant or to none (ADR-004 D5): the event may not move it from one to the other, in either direction
+    if (current.isPresent() && !Objects.equals(current.get().tenantId(), command.tenantId())) {
       throw new InvalidDataException("tenantId", "is not the tenant of the account");
     }
     SessionCutoff next = current
