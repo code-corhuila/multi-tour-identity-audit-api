@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Identity Audit API
-  version: 0.16.0
+  version: 0.17.0
   description: |
     The contract this service is tested against (ADR-004 D7). It grows with each operation, written before the
     code; the design contract lives in `07-api/contracts/openapi/identity-audit.yaml` of `multi-tour-docs`.
@@ -597,6 +597,52 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '500':
           $ref: '#/components/responses/Error'
+  /api/v1/identity-audit/internal/events:
+    post:
+      summary: Receive an event that belongs to no tenant
+      description: |
+        The route of the events that carry no `tenantId`: those of a Platform Administrator's account, which has no
+        tenant (ADR-004 D4). Job 7 sends here the event types this service consumes when the event has no tenant; an
+        event that has one goes to `/internal/tenants/{tenantId}/events`. Each route answers `400` to the envelope of
+        the other, so an event is never recorded under another tenant, or under none, by mistake. The body is the same
+        envelope and what is done with it is the same: one audit record with `tenantId` null (`201` the first time,
+        `200` for a repeat of the event id), and for `AccountSessionsRevoked` the cutoff of the account, which has no
+        tenant either. An account whose cutoff holds a tenant is refused with `400`: an account belongs to one tenant
+        or to none. Only the role `SERVICE`. The body is tolerant of fields it does not name, up to 16 KB.
+      operationId: receivePlatformEvent
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlatformEventEnvelope'
+      responses:
+        '201':
+          description: The event was recorded
+        '200':
+          description: The event was already received, or it is a revocation older than the cutoff already kept
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '413':
+          $ref: '#/components/responses/Error'
+        '415':
+          $ref: '#/components/responses/Error'
+        '422':
+          description: The change lost the race twice in a row (`BUSINESS_RULE_VIOLATION`); the caller sends it again
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/Error'
   /api/v1/identity-audit/internal/outbox:
     get:
       summary: Read the events waiting, for job 7
@@ -958,7 +1004,7 @@ components:
           description: Any type the relay routes here; today the six events of the security microservice
           example: SpecialPermissionGranted
         eventVersion: {type: integer, minimum: 1}
-        tenantId: {type: string, format: uuid}
+        tenantId: {type: string, format: uuid, description: "Absent for the accounts of the Platform Administrator; the tenant route requires it and `/internal/events` refuses it"}
         aggregateId: {type: string, format: uuid, description: "The account the event is about, or the tenant for the optional-role events"}
         actorId: {type: string, nullable: true, description: Who did it; absent when the publisher did it on its own}
         reason: {type: string, nullable: true}
