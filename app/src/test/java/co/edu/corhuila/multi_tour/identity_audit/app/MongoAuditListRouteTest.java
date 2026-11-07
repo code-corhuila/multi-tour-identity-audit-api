@@ -232,6 +232,9 @@ class MongoAuditListRouteTest extends ShellTest {
     assertThat(given().filter(Contract.answers()).get(OWN).statusCode()).isEqualTo(401);
     assertThat(refused(platform(), OWN).statusCode()).as("the Platform Administrator uses its own route").isEqualTo(403);
     assertThat(refused(as("SERVICE", null), OWN).statusCode()).isEqualTo(403);
+    for (String role : List.of("TENANT_ADMINISTRATOR", "MANAGER")) {
+      assertThat(refused(as(role, null), OWN).statusCode()).as("%s with a token that names no tenant", role).isEqualTo(403);
+    }
   }
 
   @Test

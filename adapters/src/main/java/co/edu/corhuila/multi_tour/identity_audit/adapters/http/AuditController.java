@@ -68,6 +68,14 @@ class AuditController {
     return AuditPage.of(tenant.execute(caller(request), tenantId, query(request, null)));
   }
 
+  /** The same use case and the same filters, with the tenant of the token: a caller with no tenant is refused by the use case. */
+  @GetMapping("/tenant/audit-records")
+  AuditPage own(HttpServletRequest request) {
+    Paging.onlyDeclared(request, TENANT_FILTERS);
+    Caller caller = caller(request);
+    return AuditPage.of(tenant.execute(caller, caller.tenantId(), query(request, null)));
+  }
+
   private static Caller caller(HttpServletRequest request) {
     return (Caller) request.getAttribute(JwtAuthFilter.CALLER);
   }
