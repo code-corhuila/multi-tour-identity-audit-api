@@ -154,6 +154,48 @@ class ApplySessionRevocationTest {
     assertThat(store.processed).containsExactly(EVENT);
   }
 
+  private static Command commandWithNoTenant(String eventId, Instant from) {
+    return new Command(eventId, "AccountSessionsRevoked", null, ACCOUNT, ACCOUNT, from.toString());
+  }
+
+  private static PlatformEvent eventWithNoTenant(String eventId, Instant from) {
+    return new PlatformEvent(eventId, "AccountSessionsRevoked", null, ACCOUNT, null, null,
+        Map.of("accountId", ACCOUNT, "revokedFrom", from.toString()), from);
+  }
+
+  @Test
+  void A_a_revocation_with_no_tenant_is_accepted() {
+    assertThat(apply.execute(commandWithNoTenant(EVENT, T10), eventWithNoTenant(EVENT, T10))).isEqualTo(Outcome.APPLIED);
+
+    assertThat(store.cutoffs.get(ACCOUNT)).isEqualTo(new SessionCutoff(ACCOUNT, null, T10, NOW));
+    assertThat(store.audits).singleElement().satisfies(r -> {
+      assertThat(r.eventId()).isEqualTo(EVENT);
+      assertThat(r.tenantId()).as("the account of the platform has no tenant").isNull();
+    });
+  }
+
+  @Test
+  void A_an_account_of_a_tenant_refuses_an_event_with_no_tenant_and_the_other_way_round() {
+    run(EVENT, T10);
+    assertThatThrownBy(() -> apply.execute(commandWithNoTenant(OTHER_EVENT, T20), eventWithNoTenant(OTHER_EVENT, T20)))
+        .as("an account with a tenant, an event with none")
+        .isInstanceOf(InvalidDataException.class).hasMessageContaining("tenant of the account");
+    assertThat(store.cutoffs.get(ACCOUNT)).isEqualTo(new SessionCutoff(ACCOUNT, TENANT, T10, NOW));
+    assertThat(store.processed).containsExactly(EVENT);
+    assertThat(store.audits).hasSize(1);
+
+    FakeCutoffs platform = new FakeCutoffs();
+    ApplySessionRevocation platformApply =
+        new ApplySessionRevocation(platform, Clock.fixed(NOW, ZoneOffset.UTC), () -> "00000000-0000-4000-8000-0000000000aa");
+    platformApply.execute(commandWithNoTenant(EVENT, T10), eventWithNoTenant(EVENT, T10));
+    assertThatThrownBy(() -> platformApply.execute(command(OTHER_EVENT, T20), event(OTHER_EVENT, T20)))
+        .as("an account with no tenant, an event with one")
+        .isInstanceOf(InvalidDataException.class).hasMessageContaining("tenant of the account");
+    assertThat(platform.cutoffs.get(ACCOUNT)).isEqualTo(new SessionCutoff(ACCOUNT, null, T10, NOW));
+    assertThat(platform.processed).containsExactly(EVENT);
+    assertThat(platform.audits).hasSize(1);
+  }
+
   @Test
   void A_an_event_that_is_not_a_valid_revocation_is_refused_with_its_field() {
     assertThatThrownBy(() -> new Command(EVENT, "TenantInactivated", TENANT, ACCOUNT, ACCOUNT, T10.toString()))
@@ -161,8 +203,10 @@ class ApplySessionRevocationTest {
     for (String bad : new String[] {null, "", "NOT-A-UUID", EVENT.toUpperCase(), EVENT + "\n"}) {
       assertThatThrownBy(() -> new Command(bad, "AccountSessionsRevoked", TENANT, ACCOUNT, ACCOUNT, T10.toString()))
           .as("event id %s", bad).isInstanceOf(InvalidDataException.class);
-      assertThatThrownBy(() -> new Command(EVENT, "AccountSessionsRevoked", bad, ACCOUNT, ACCOUNT, T10.toString()))
-          .as("tenant id %s", bad).isInstanceOf(InvalidDataException.class);
+      if (bad != null) { // no tenant is the account of the platform; a tenant that is there must still be a UUID
+        assertThatThrownBy(() -> new Command(EVENT, "AccountSessionsRevoked", bad, ACCOUNT, ACCOUNT, T10.toString()))
+            .as("tenant id %s", bad).isInstanceOf(InvalidDataException.class);
+      }
       assertThatThrownBy(() -> new Command(EVENT, "AccountSessionsRevoked", TENANT, bad, bad, T10.toString()))
           .as("account id %s", bad).isInstanceOf(InvalidDataException.class);
     }
