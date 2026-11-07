@@ -209,12 +209,13 @@ class MongoPlatformAccountTest extends ShellTest {
 
     for (String tenant : List.of(TENANT, OTHER_TENANT)) {
       String token = Tokens.valid(Tokens.claims(newId(), 600, List.of("TENANT_ADMINISTRATOR"), tenant));
-      Response own = given().header("Authorization", "Bearer " + token).filter(Contract.answers())
-          .get("/api/v1/identity-audit/tenants/" + tenant + "/audit-records");
-      assertThat(own.statusCode()).isEqualTo(200);
-      assertThat(own.jsonPath().getList("data.auditRecordId")).as("the audit of %s", tenant).doesNotContain(platformRecord);
-      if (tenant.equals(TENANT)) {
-        assertThat(own.jsonPath().getList("data.auditRecordId")).as("it does answer with the records of its own tenant").contains(tenantRecord);
+      for (String route : List.of("/api/v1/identity-audit/tenants/" + tenant + "/audit-records", "/api/v1/identity-audit/tenant/audit-records")) {
+        Response own = given().header("Authorization", "Bearer " + token).filter(Contract.answers()).get(route);
+        assertThat(own.statusCode()).as(route).isEqualTo(200);
+        assertThat(own.jsonPath().getList("data.auditRecordId")).as("the audit of %s on %s", tenant, route).doesNotContain(platformRecord);
+        if (tenant.equals(TENANT)) {
+          assertThat(own.jsonPath().getList("data.auditRecordId")).as("it does answer with the records of its own tenant").contains(tenantRecord);
+        }
       }
     }
   }
