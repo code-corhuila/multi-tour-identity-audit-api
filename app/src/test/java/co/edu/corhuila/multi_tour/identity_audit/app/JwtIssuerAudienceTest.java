@@ -12,7 +12,7 @@ import org.springframework.test.context.TestPropertySource;
 @TestPropertySource(properties = {"JWT_ISSUER=multi-tour-security", "JWT_AUDIENCE=multi-tour"})
 class JwtIssuerAudienceTest extends ShellTest {
 
-  private static final String PROTECTED = "/api/v1/identity-audit/tenants/not-built/audit-records";
+  private static final String PROTECTED = "/api/v1/identity-audit/not-built";
 
   private static JWTClaimsSet.Builder token() {
     return Tokens.claims("account-1", 600, List.of("PLATFORM_ADMINISTRATOR"), null);
