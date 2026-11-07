@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Identity Audit API
-  version: 0.17.0
+  version: 0.18.0
   description: |
     The contract this service is tested against (ADR-004 D7). It grows with each operation, written before the
     code; the design contract lives in `07-api/contracts/openapi/identity-audit.yaml` of `multi-tour-docs`.
@@ -514,6 +514,49 @@ paths:
         '403':
           $ref: '#/components/responses/Error'
         '404':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+  /api/v1/identity-audit/tenant/audit-records:
+    get:
+      summary: List the audit of the caller's own tenant
+      description: The same records as the audit of one tenant, for the tenant named by the token's `tenantId` claim, so a caller that does not know the identifier of its tenant can read it. Read by its `TENANT_ADMINISTRATOR`, and by a `MANAGER`, `ACCOUNTANT` or `ANALYST` only while the audit access of their role is enabled. The Platform Administrator, a `SERVICE`, a collaborator and a final customer are `403`. The tenant is never taken from the request; a filter that is not declared, `tenantId` included, is `400`. There is no `404`, because the caller cannot name another tenant.
+      operationId: listOwnAuditRecords
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema: {type: integer, minimum: 1, default: 1}
+        - name: limit
+          in: query
+          schema: {type: integer, minimum: 1, maximum: 100, default: 20}
+        - name: from
+          in: query
+          description: Start of the period, RFC 3339 in UTC, inclusive
+          schema: {type: string, format: date-time}
+        - name: to
+          in: query
+          description: End of the period, RFC 3339 in UTC, exclusive; before `from` is `400`
+          schema: {type: string, format: date-time}
+        - name: action
+          in: query
+          description: Only the records of this action; any other is `400`
+          schema:
+            type: string
+            enum: [ACCOUNT_SESSIONS_REVOKED, ACCOUNT_BLOCKED, SPECIAL_PERMISSION_GRANTED, SPECIAL_PERMISSION_REVOKED, OPTIONAL_ROLE_ENABLED, OPTIONAL_ROLE_DISABLED, TENANT_CREATED, TENANT_INACTIVATED, TENANT_REACTIVATED, AUDIT_ACCESS_ENABLED, AUDIT_ACCESS_DISABLED]
+      responses:
+        '200':
+          description: One page of audit records
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditRecordPage'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
           $ref: '#/components/responses/Error'
         '500':
           $ref: '#/components/responses/Error'

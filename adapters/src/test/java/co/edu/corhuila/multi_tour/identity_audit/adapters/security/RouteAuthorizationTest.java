@@ -78,6 +78,20 @@ class RouteAuthorizationTest {
   }
 
   @Test
+  void C_the_own_audit_route_has_the_roles_of_the_tenant_route_and_no_other_path_opens_with_it() {
+    String own = "/api/v1/identity-audit/tenant/audit-records";
+    for (Role role : new Role[] {Role.TENANT_ADMINISTRATOR, Role.MANAGER, Role.ACCOUNTANT, Role.ANALYST, Role.OPERATIONAL_COLLABORATOR, Role.FINAL_CUSTOMER}) {
+      Caller user = new Caller("account-3", "00000000-0000-4000-8000-00000000000a", Set.of(role));
+      assertThatCode(() -> passes(own, user)).as("%s reaches the use case", role).doesNotThrowAnyException();
+      for (String other : new String[] {own + "/x", own + "/", own + ";x=1", "/api/v1/identity-audit/tenant/audit-records%2e"}) {
+        assertThatThrownBy(() -> passes(other, user)).as("%s on %s", role, other).isInstanceOf(ForbiddenException.class);
+      }
+    }
+    assertThatThrownBy(() -> passes(own, ADMIN)).as("the Platform Administrator uses its own route").isInstanceOf(ForbiddenException.class);
+    assertThatThrownBy(() -> passes(own, SERVICE)).isInstanceOf(ForbiddenException.class);
+  }
+
+  @Test
   void C_the_visual_identity_route_is_for_the_tenant_administrator_and_only_for_it() {
     Caller tenantAdmin = new Caller("account-2", "00000000-0000-4000-8000-00000000000a", Set.of(Role.TENANT_ADMINISTRATOR));
     String route = "/api/v1/identity-audit/tenant/visual-identity";

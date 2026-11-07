@@ -27,6 +27,7 @@ class MongoAuditListRouteTest extends ShellTest {
   private static final String ADMIN = "1c2d3e4f-5a6b-4c7d-8e9f-0a1b2c3d4e5f";
   private static final String ALL = "/api/v1/identity-audit/audit-records";
   private static final String OF_TENANT = "/api/v1/identity-audit/tenants/" + TENANT + "/audit-records";
+  private static final String OWN = "/api/v1/identity-audit/tenant/audit-records";
   private static final String OF_OTHER = "/api/v1/identity-audit/tenants/" + OTHER + "/audit-records";
   private static final String ACCESS = "/api/v1/identity-audit/tenant/audit-access/";
   private static final Instant BASE = Instant.parse("2026-11-06T10:00:00Z");
@@ -185,5 +186,95 @@ class MongoAuditListRouteTest extends ShellTest {
     assertThat(refused(platform(), ALL + "?action=NOPE").statusCode()).isEqualTo(400);
     assertThat(refused(platform(), ALL + "?tenantId=not-a-uuid").statusCode()).isEqualTo(400);
     assertThat(refused(platform(), ALL + "?limit=101").statusCode()).isEqualTo(400);
+  }
+
+  @Test
+  void C_the_own_tenant_audit_never_takes_the_tenant_from_the_request() {
+    seed(1, TENANT, "ACCOUNT_BLOCKED");
+    seed(2, OTHER, "ACCOUNT_BLOCKED");
+    seed(3, null, "ACCOUNT_BLOCKED");
+
+    assertThat(read(as("TENANT_ADMINISTRATOR", TENANT), OWN).jsonPath().getList("data.auditRecordId")).containsExactly(id(1));
+    assertThat(read(as("TENANT_ADMINISTRATOR", OTHER), OWN).jsonPath().getList("data.auditRecordId")).as("each token reads its own").containsExactly(id(2));
+    assertThat(refused(as("TENANT_ADMINISTRATOR", TENANT), OWN + "?tenantId=" + OTHER).statusCode()).as("a tenant in the query").isEqualTo(400);
+    assertThat(refused(as("TENANT_ADMINISTRATOR", TENANT), OWN + "?tenantId=" + TENANT).statusCode()).as("not even its own").isEqualTo(400);
+    Response header = as("TENANT_ADMINISTRATOR", TENANT).header("X-Tenant-Id", OTHER).filter(Contract.filter()).get(OWN);
+    assertThat(header.jsonPath().getList("data.auditRecordId")).as("a header names nothing").containsExactly(id(1));
+  }
+
+  @Test
+  void C_the_own_tenant_audit_is_read_by_its_administrator_and_by_an_enabled_role_and_refused_to_the_rest() {
+    seed(1, TENANT, "ACCOUNT_BLOCKED");
+    seed(2, OTHER, "ACCOUNT_BLOCKED");
+
+    Response administrator = read(as("TENANT_ADMINISTRATOR", TENANT), OWN);
+    assertThat(administrator.statusCode()).isEqualTo(200);
+    assertThat(administrator.jsonPath().getList("data.auditRecordId")).containsExactly(id(1));
+
+    for (String role : List.of("MANAGER", "ACCOUNTANT", "ANALYST", "OPERATIONAL_COLLABORATOR", "FINAL_CUSTOMER")) {
+      assertThat(refused(as(role, TENANT), OWN).statusCode()).as("%s without the access", role).isEqualTo(403);
+    }
+    assertThat(as("TENANT_ADMINISTRATOR", TENANT).body(Map.of("enabled", true)).put(ACCESS + "MANAGER").statusCode()).isEqualTo(200);
+    assertThat(read(as("MANAGER", TENANT), OWN).statusCode()).isEqualTo(200);
+    assertThat(refused(as("ANALYST", TENANT), OWN).statusCode()).as("another role still has no access").isEqualTo(403);
+    assertThat(refused(as("OPERATIONAL_COLLABORATOR", TENANT), OWN).statusCode()).isEqualTo(403);
+    assertThat(refused(as("FINAL_CUSTOMER", TENANT), OWN).statusCode()).isEqualTo(403);
+
+    assertThat(as("TENANT_ADMINISTRATOR", TENANT).body(Map.of("enabled", false)).put(ACCESS + "MANAGER").statusCode()).isEqualTo(200);
+    assertThat(refused(as("MANAGER", TENANT), OWN).statusCode()).as("closing the access closes it at once").isEqualTo(403);
+  }
+
+  @Test
+  void C_the_own_tenant_audit_is_refused_to_a_token_with_no_tenant() {
+    seed(1, TENANT, "ACCOUNT_BLOCKED");
+    seed(2, null, "ACCOUNT_BLOCKED");
+
+    assertThat(given().filter(Contract.answers()).get(OWN).statusCode()).isEqualTo(401);
+    assertThat(refused(platform(), OWN).statusCode()).as("the Platform Administrator uses its own route").isEqualTo(403);
+    assertThat(refused(as("SERVICE", null), OWN).statusCode()).isEqualTo(403);
+    for (String role : List.of("TENANT_ADMINISTRATOR", "MANAGER")) {
+      assertThat(refused(as(role, null), OWN).statusCode()).as("%s with a token that names no tenant", role).isEqualTo(403);
+    }
+  }
+
+  @Test
+  void C_the_own_tenant_audit_pages_and_filters_as_the_contract_says() {
+    for (int n = 1; n <= 25; n++) {
+      seed(n, TENANT, n % 5 == 0 ? "ACCOUNT_BLOCKED" : "SPECIAL_PERMISSION_GRANTED");
+    }
+    RequestSpecification who = as("TENANT_ADMINISTRATOR", TENANT);
+
+    Response first = read(as("TENANT_ADMINISTRATOR", TENANT), OWN);
+    assertThat(first.jsonPath().getList("data")).as("20 by default").hasSize(20);
+    assertThat(first.jsonPath().getInt("meta.total")).isEqualTo(25);
+    assertThat(read(as("TENANT_ADMINISTRATOR", TENANT), OWN + "?page=3&limit=10").jsonPath().getList("data.auditRecordId"))
+        .containsExactly(id(5), id(4), id(3), id(2), id(1));
+    String from = BASE.plusSeconds(60L * 5).toString();
+    String to = BASE.plusSeconds(60L * 10).toString();
+    assertThat(read(as("TENANT_ADMINISTRATOR", TENANT), OWN + "?from=" + from + "&to=" + to + "&action=ACCOUNT_BLOCKED")
+        .jsonPath().getList("data.auditRecordId")).as("period and action together").containsExactly(id(5));
+
+    for (String bad : List.of("?page=0", "?limit=0", "?limit=101", "?limit=abc", "?from=yesterday", "?from=" + to + "&to=" + from,
+        "?action=NOPE", "?nickname=x", "?page=1&page=2", "?from=", "?action=")) {
+      Response answer = refused(who, OWN + bad);
+      assertThat(answer.statusCode()).as("%s: %s", bad, answer.asString()).isEqualTo(400);
+      assertThat(answer.jsonPath().getString("error")).isEqualTo("VALIDATION_ERROR");
+    }
+  }
+
+  @Test
+  void C_both_audit_routes_of_a_tenant_answer_the_same_records() {
+    for (int n = 1; n <= 12; n++) {
+      seed(n, n % 4 == 0 ? OTHER : TENANT, n % 3 == 0 ? "ACCOUNT_BLOCKED" : "SPECIAL_PERMISSION_GRANTED");
+    }
+    assertThat(as("TENANT_ADMINISTRATOR", TENANT).body(Map.of("enabled", true)).put(ACCESS + "ANALYST").statusCode()).isEqualTo(200);
+
+    for (String role : List.of("TENANT_ADMINISTRATOR", "ANALYST")) {
+      for (String query : List.of("", "?limit=3&page=2", "?action=ACCOUNT_BLOCKED", "?from=" + BASE.plusSeconds(180) + "&to=" + BASE.plusSeconds(600))) {
+        Response own = read(as(role, TENANT), OWN + query);
+        Response ofTenant = read(as(role, TENANT), OF_TENANT + query);
+        assertThat(own.asString()).as("%s on %s", role, query).isEqualTo(ofTenant.asString());
+      }
+    }
   }
 }
