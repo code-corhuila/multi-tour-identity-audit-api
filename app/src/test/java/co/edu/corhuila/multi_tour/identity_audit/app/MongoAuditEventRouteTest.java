@@ -125,6 +125,23 @@ class MongoAuditEventRouteTest extends ShellTest {
   }
 
   @Test
+  void C_a_support_access_fact_is_recorded_under_support_accesses() {
+    String opened = newId();
+    Map<String, Object> fact = granted(opened);
+    fact.put("eventType", "PlatformExceptionalAccessOpened");
+    fact.remove("reason");
+    fact.put("payload", Map.of("authorizationId", ACCOUNT, "platformAdministratorId", ADMIN, "basis", "TENANT_AUTHORIZATION",
+        "scope", List.of("CATALOG"), "includesSensitiveData", false));
+    assertThat(deliver(opened, fact).statusCode()).isEqualTo(201);
+
+    Document kept = record(opened);
+    assertThat(kept.getString("action")).isEqualTo("PLATFORM_EXCEPTIONAL_ACCESS_OPENED");
+    assertThat(kept.getString("actorId")).isEqualTo(ADMIN);
+    assertThat(kept.getString("affectedRecordId")).isEqualTo("support-accesses/" + ACCOUNT);
+    assertThat(kept.get("newValue", Document.class).getString("basis")).isEqualTo("TENANT_AUTHORIZATION");
+  }
+
+  @Test
   void C_an_event_with_the_extended_fields_keeps_them_and_one_without_an_actor_is_the_security_service() {
     String withFields = newId();
     Map<String, Object> body = granted(withFields);
