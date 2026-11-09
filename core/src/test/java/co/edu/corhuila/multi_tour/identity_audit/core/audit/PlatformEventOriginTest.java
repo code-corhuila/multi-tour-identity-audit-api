@@ -53,4 +53,31 @@ class PlatformEventOriginTest {
     assertThat(record.affectedRecordId()).isEqualTo("accounts/" + AGGREGATE);
     assertThat(record.action()).isEqualTo("SOMETHING_NEW_HAPPENED");
   }
+
+  // Spec 009 of the audit (HU-SEC-007): the exceptional access of the Platform Administrator to a tenant is about the access, by that person.
+  @Test
+  void D_support_access_facts_are_recorded_against_the_access() {
+    AuditRecord opened = recorded("PlatformExceptionalAccessOpened", PERSON, Map.of("authorizationId", AGGREGATE));
+    AuditRecord closed = recorded("PlatformExceptionalAccessClosed", PERSON, Map.of("authorizationId", AGGREGATE));
+
+    assertThat(opened.action()).isEqualTo("PLATFORM_EXCEPTIONAL_ACCESS_OPENED");
+    assertThat(closed.action()).isEqualTo("PLATFORM_EXCEPTIONAL_ACCESS_CLOSED");
+    assertThat(opened.affectedRecordId()).isEqualTo("support-accesses/" + AGGREGATE);
+    assertThat(closed.affectedRecordId()).isEqualTo("support-accesses/" + AGGREGATE);
+  }
+
+  @Test
+  void D_support_access_actor_is_the_envelope_then_the_payload_then_the_security_service() {
+    assertThat(recorded("PlatformExceptionalAccessOpened", PERSON, Map.of("actorId", OTHER_PERSON)).actorId()).isEqualTo(PERSON);
+    assertThat(recorded("PlatformExceptionalAccessOpened", null, Map.of("actorId", OTHER_PERSON)).actorId()).isEqualTo(OTHER_PERSON);
+    assertThat(recorded("PlatformExceptionalAccessClosed", null, Map.of()).actorId()).isEqualTo("multi-tour-security");
+  }
+
+  @Test
+  void D_support_access_payload_is_kept() {
+    Map<String, Object> payload = Map.of("authorizationId", AGGREGATE, "scope", java.util.List.of("CATALOG"), "basis", "TENANT_AUTHORIZATION",
+        "includesSensitiveData", false, "expiresAt", "2026-11-09T12:00:00Z");
+
+    assertThat(recorded("PlatformExceptionalAccessOpened", PERSON, payload).newValue()).isEqualTo(payload);
+  }
 }
