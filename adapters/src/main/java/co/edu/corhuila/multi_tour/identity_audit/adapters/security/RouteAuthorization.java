@@ -33,6 +33,8 @@ public final class RouteAuthorization implements HandlerInterceptor {
     String uri = request.getRequestURI();
     if (RouteGuard.isDisguised(uri)
         || !(request.getAttribute(JwtAuthFilter.CALLER) instanceof Caller who)
+        // the token of an exceptional or emergency access has no area here: the audit trail is not tenant data and would show the access its own record (spec 012)
+        || who.exceptionalAccess()
         || who.roles().stream().noneMatch(allowedOn(uri)::contains)) {
       throw new ForbiddenException();
     }

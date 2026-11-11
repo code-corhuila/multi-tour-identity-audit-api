@@ -27,7 +27,9 @@ class AuditActionTest {
         "PaymentEvidenceRegistered", "PaymentValidated", "PaymentRejected", "ReservationConfirmed", "ReservationCancelled",
         "RefundAuthorized", "ClientNotified", "CustomerRegistered", "DiscountRuleChanged", "SensitiveDataAccessed",
         // the exceptional access of the Platform Administrator to a tenant (spec 009)
-        "PlatformExceptionalAccessOpened", "PlatformExceptionalAccessClosed");
+        "PlatformExceptionalAccessOpened", "PlatformExceptionalAccessClosed",
+        // each use of the token of that access (spec 012)
+        "PlatformExceptionalAccessUsed");
 
     assertThat(events).allSatisfy(event -> assertThat(AuditAction.isKnown(AuditAction.of(event))).as(event).isTrue());
     assertThat(AuditAction.KNOWN).as("no action without an event").hasSize(events.size());
