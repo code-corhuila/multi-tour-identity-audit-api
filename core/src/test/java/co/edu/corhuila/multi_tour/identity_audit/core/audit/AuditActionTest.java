@@ -39,6 +39,9 @@ class AuditActionTest {
     assertThat(AuditAction.of("PlatformExceptionalAccessClosed")).isEqualTo("PLATFORM_EXCEPTIONAL_ACCESS_CLOSED");
     assertThat(AuditAction.isKnown("PLATFORM_EXCEPTIONAL_ACCESS_OPENED")).isTrue();
     assertThat(AuditAction.isKnown("PLATFORM_EXCEPTIONAL_ACCESS_CLOSED")).isTrue();
+    // spec 012: each use of the token of an access
+    assertThat(AuditAction.isKnown("PLATFORM_EXCEPTIONAL_ACCESS_USED")).isTrue();
+    assertThat(AuditAction.of("PlatformExceptionalAccessUsed")).isEqualTo("PLATFORM_EXCEPTIONAL_ACCESS_USED");
   }
 
   @Test

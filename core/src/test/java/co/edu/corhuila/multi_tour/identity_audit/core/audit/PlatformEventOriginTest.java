@@ -80,4 +80,17 @@ class PlatformEventOriginTest {
 
     assertThat(recorded("PlatformExceptionalAccessOpened", PERSON, payload).newValue()).isEqualTo(payload);
   }
+
+  // Spec 012 (G-SEC9-1): each use of the token of an access is about that access, by the person who holds it.
+  @Test
+  void A_the_audit_records_the_use_with_its_authorization_id() {
+    Map<String, Object> payload = Map.of("authorizationId", AGGREGATE, "platformAdministratorId", PERSON, "method", "GET",
+        "route", "/api/v1/operations-cost/departures/{id}", "area", "OPERATIONS", "correlationId", "trace-1");
+    AuditRecord used = recorded("PlatformExceptionalAccessUsed", PERSON, payload);
+
+    assertThat(used.action()).isEqualTo("PLATFORM_EXCEPTIONAL_ACCESS_USED");
+    assertThat(used.affectedRecordId()).isEqualTo("support-accesses/" + AGGREGATE);
+    assertThat(used.actorId()).isEqualTo(PERSON);
+    assertThat(used.newValue()).isEqualTo(payload);
+  }
 }
