@@ -23,7 +23,9 @@ public final class AuditAction {
       "RESERVATION_CANCELLED", "REFUND_AUTHORIZED", "CLIENT_NOTIFIED",
       "CUSTOMER_REGISTERED", "DISCOUNT_RULE_CHANGED", "SENSITIVE_DATA_ACCESSED",
       // the exceptional access of the Platform Administrator to a tenant (spec 009)
-      "PLATFORM_EXCEPTIONAL_ACCESS_OPENED", "PLATFORM_EXCEPTIONAL_ACCESS_CLOSED");
+      "PLATFORM_EXCEPTIONAL_ACCESS_OPENED", "PLATFORM_EXCEPTIONAL_ACCESS_CLOSED",
+      // each use of the token of that access by the services (spec 012)
+      "PLATFORM_EXCEPTIONAL_ACCESS_USED");
 
   private static final int MAX_LENGTH = 64;
   private static final Pattern EVENT_TYPE = Pattern.compile("[A-Z][A-Za-z0-9]{0,63}");

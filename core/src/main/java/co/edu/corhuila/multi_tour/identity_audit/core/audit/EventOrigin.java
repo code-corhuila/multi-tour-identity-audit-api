@@ -40,7 +40,8 @@ final class EventOrigin {
       Map.entry("SensitiveDataAccessed", CUSTOMER),
       Map.entry("DiscountRuleChanged", DISCOUNT_RULE),
       Map.entry("PlatformExceptionalAccessOpened", SUPPORT_ACCESS),
-      Map.entry("PlatformExceptionalAccessClosed", SUPPORT_ACCESS));
+      Map.entry("PlatformExceptionalAccessClosed", SUPPORT_ACCESS),
+      Map.entry("PlatformExceptionalAccessUsed", SUPPORT_ACCESS));
 
   private EventOrigin() {}
 
