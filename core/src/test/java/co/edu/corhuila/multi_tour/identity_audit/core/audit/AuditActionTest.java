@@ -37,7 +37,7 @@ class AuditActionTest {
         "CashIncomeRecorded", "OperationalPaymentRecorded", "OperationalExpenseRecorded", "RefundExecuted",
         "SalidaScheduled", "SalidaRescheduled", "SalidaVehiclesChanged", "SalidaExecutionStarted", "SalidaFinalized",
         "SalidaMarkedPendienteDeRegularizacion", "SalidaCancelled", "ExtraordinaryCancellationRecorded", "OperationalCostRecorded",
-        "PasswordRecoveryRequested", "PasswordReset");
+        "PasswordRecoveryRequested", "PasswordReset", "PasswordResetFailed");
 
     assertThat(events).allSatisfy(event -> assertThat(AuditAction.isKnown(AuditAction.of(event))).as(event).isTrue());
     assertThat(AuditAction.KNOWN).as("no action without an event").hasSize(events.size());
