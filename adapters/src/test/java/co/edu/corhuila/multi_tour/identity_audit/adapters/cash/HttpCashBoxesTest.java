@@ -109,4 +109,31 @@ class HttpCashBoxesTest {
     assertThatThrownBy(() -> adapter(base, "t").anyOpenOrPendingClosing(A)).isInstanceOf(CashBoxesUnavailableException.class);
     assertThat(requests.size()).isLessThanOrEqualTo(50);
   }
+
+  @Test
+  void C_an_answer_that_is_not_a_list_with_its_paging_is_unavailable_and_never_no_open_cash() throws IOException {
+    for (String broken : new String[] {"{}", "", "<html>bad gateway</html>", "[]", "{\"data\":[]}", "{\"data\":{},\"meta\":{\"totalPages\":1}}",
+        "{\"data\":[],\"meta\":{\"totalPages\":\"one\"}}", "{\"data\":[{\"businessDate\":\"2026-11-11\"}],\"meta\":{\"totalPages\":1}}", "null"}) {
+      String base = start(query -> new Object[] {200, broken});
+      assertThatThrownBy(() -> adapter(base, "t").anyOpenOrPendingClosing(A)).as(broken).isInstanceOf(CashBoxesUnavailableException.class);
+      server.stop(0);
+    }
+  }
+
+  @Test
+  void C_a_slow_service_is_cut_by_a_total_deadline() throws IOException {
+    String base = start(query -> {
+      try {
+        Thread.sleep(300);
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+      }
+      return new Object[] {200, page(1, 100000, B)};
+    });
+    long started = System.nanoTime();
+
+    assertThatThrownBy(() -> new HttpCashBoxes(base, "t", new ObjectMapper(), Duration.ofSeconds(2), Duration.ofMillis(900)).anyOpenOrPendingClosing(A))
+        .isInstanceOf(CashBoxesUnavailableException.class);
+    assertThat(Duration.ofNanos(System.nanoTime() - started)).isLessThan(Duration.ofSeconds(3));
+  }
 }
