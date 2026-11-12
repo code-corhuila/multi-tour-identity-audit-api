@@ -50,7 +50,7 @@ class CashAndOperationsEventsTest {
     for (String event : new String[] {"CashSessionOpened", "CashSessionClosed", "CashSessionAutoCreated", "CashSessionAutoClosed", "CashSessionReopened",
         "CashIncomeRecorded", "OperationalPaymentRecorded", "OperationalExpenseRecorded", "RefundExecuted", "SalidaScheduled", "SalidaRescheduled",
         "SalidaVehiclesChanged", "SalidaExecutionStarted", "SalidaFinalized", "SalidaMarkedPendienteDeRegularizacion", "SalidaCancelled", "ExtraordinaryCancellationRecorded",
-        "OperationalCostRecorded", "PasswordRecoveryRequested", "PasswordReset"}) {
+        "OperationalCostRecorded", "PasswordRecoveryRequested", "PasswordReset", "PasswordResetFailed"}) {
       assertThat(AuditAction.isKnown(AuditAction.of(event))).as(event).isTrue();
     }
     assertThat(AuditAction.isKnown("CASH_SESSION_NOPE")).isFalse();
