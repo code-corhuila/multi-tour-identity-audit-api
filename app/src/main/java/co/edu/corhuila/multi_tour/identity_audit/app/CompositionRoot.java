@@ -37,6 +37,10 @@ import com.mongodb.ConnectionString;
 import com.mongodb.MongoClientSettings;
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoClients;
+import co.edu.corhuila.multi_tour.identity_audit.adapters.cash.HttpCashBoxes;
+import co.edu.corhuila.multi_tour.identity_audit.core.tenant.CashBoxes;
+import co.edu.corhuila.multi_tour.identity_audit.core.tenant.ChangeTenantLocalization;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Clock;
 import java.time.Duration;
 import java.util.UUID;
@@ -138,6 +142,19 @@ class CompositionRoot {
   @Bean
   ChangeAuditAccess changeAuditAccess(AuditAccessSettings settings, Clock clock, IdGenerator ids) {
     return new ChangeAuditAccess(settings, clock, ids);
+  }
+
+  /** The cash boxes of another service (spec 010): without its address or the token of this service the answer is always "unavailable". */
+  @Bean
+  CashBoxes cashBoxes(
+      ObjectMapper json, @Value("${CASH_REPORTING_BASE_URL:}") String baseUrl, @Value("${SERVICE_TOKEN:}") String token,
+      @Value("${cash.read.timeout:PT5S}") Duration timeout) {
+    return new HttpCashBoxes(baseUrl, token, json, timeout);
+  }
+
+  @Bean
+  ChangeTenantLocalization changeTenantLocalization(TenantRepository tenants, CashBoxes cashBoxes, IdGenerator ids, Clock clock) {
+    return new ChangeTenantLocalization(tenants, cashBoxes, ids, clock);
   }
 
   @Bean
