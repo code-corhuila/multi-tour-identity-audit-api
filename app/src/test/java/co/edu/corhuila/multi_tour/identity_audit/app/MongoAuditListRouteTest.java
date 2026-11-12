@@ -144,6 +144,21 @@ class MongoAuditListRouteTest extends ShellTest {
     assertThat(refused(as("TENANT_ADMINISTRATOR", TENANT), OF_TENANT + "?action=PLATFORM_EXCEPTIONAL_ACCESS_NOPE").statusCode()).isEqualTo(400);
   }
 
+  // Spec 008, amended 2026-11-12 (AC-IDA-08.8): the actions of cash, of operations and of the recovery of the password are accepted by the filter.
+  @Test
+  void C_filter_by_a_cash_action() {
+    seed(1, TENANT, "CASH_INCOME_RECORDED");
+    seed(2, TENANT, "ACCOUNT_BLOCKED");
+    seed(3, TENANT, "PASSWORD_RESET");
+
+    assertThat(read(as("TENANT_ADMINISTRATOR", TENANT), OF_TENANT + "?action=CASH_INCOME_RECORDED").jsonPath().getList("data.auditRecordId"))
+        .containsExactly(id(1));
+    assertThat(read(as("TENANT_ADMINISTRATOR", TENANT), OF_TENANT + "?action=PASSWORD_RESET").jsonPath().getList("data.auditRecordId"))
+        .containsExactly(id(3));
+    assertThat(read(as("TENANT_ADMINISTRATOR", TENANT), OF_TENANT + "?action=SALIDA_CANCELLED").jsonPath().getList("data")).isEmpty();
+    assertThat(refused(as("TENANT_ADMINISTRATOR", TENANT), OF_TENANT + "?action=CASH_INCOME_NOPE").statusCode()).isEqualTo(400);
+  }
+
   @Test
   void C_another_tenants_audit_is_404_whatever_the_role_and_the_access() {
     seed(1, OTHER, "ACCOUNT_BLOCKED");
