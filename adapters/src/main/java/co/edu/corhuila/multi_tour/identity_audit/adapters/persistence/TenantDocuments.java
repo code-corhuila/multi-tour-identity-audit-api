@@ -4,6 +4,7 @@ import co.edu.corhuila.multi_tour.identity_audit.core.tenant.FailedStep;
 import co.edu.corhuila.multi_tour.identity_audit.core.tenant.InvalidDataException;
 import co.edu.corhuila.multi_tour.identity_audit.core.tenant.Tenant;
 import co.edu.corhuila.multi_tour.identity_audit.core.tenant.TenantEvent;
+import co.edu.corhuila.multi_tour.identity_audit.core.tenant.TenantEventType;
 import co.edu.corhuila.multi_tour.identity_audit.core.tenant.TenantStatus;
 import co.edu.corhuila.multi_tour.identity_audit.core.tenant.VisualIdentity;
 import com.mongodb.client.model.Filters;
@@ -51,6 +52,9 @@ final class TenantDocuments {
         Filters.eq("statusChangedBy", expected.statusChangedBy()),
         Filters.eq("statusReason", expected.statusReason()),
         Filters.eq("failedStep", expected.failedStep() == null ? null : expected.failedStep().name()),
+        // the zone and the country change forward: both are compared so that two changes decided on the same state, even in the same instant, have one winner
+        Filters.eq("timeZone", expected.timeZone()),
+        Filters.eq("country", expected.country()),
         // a save of the colors moves updatedAt too; both are compared so that neither write overwrites the other
         sameColor("visualIdentity.primaryColor", color(expected.visualIdentity(), true)),
         sameColor("visualIdentity.secondaryColor", color(expected.visualIdentity(), false)));
@@ -62,6 +66,13 @@ final class TenantDocuments {
     Document payload = toDocument(tenant);
     payload.remove("_id");
     payload.put("tenantId", tenant.tenantId());
+    if (event.type() == TenantEventType.TENANT_LOCALIZATION_CHANGED) {
+      // what the others need to apply the change forward and to know what it was (spec 010, D-05): the tenant above is the new state
+      payload.put("previousTimeZone", event.previous().timeZone());
+      payload.put("previousCountry", event.previous().country());
+      payload.put("effectiveAt", event.occurredAt().toString());
+      payload.put("changedBy", event.actor().strip());
+    }
     Date at = Date.from(event.occurredAt());
     Document document =
         new Document("_id", event.eventId())
