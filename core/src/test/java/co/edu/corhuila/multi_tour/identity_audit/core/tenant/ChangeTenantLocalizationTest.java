@@ -145,6 +145,20 @@ class ChangeTenantLocalizationTest {
   }
 
   @Test
+  void A_an_inactive_tenant_is_refused_even_with_the_value_it_already_has() {
+    tenants.tenants.put(A, tenants.tenants.get(A).inactivate("platform", "reason", T0));
+
+    assertThatThrownBy(() -> run(administratorOf(A), "America/Bogota", "CO")).isInstanceOf(BusinessRuleViolationException.class);
+  }
+
+  @Test
+  void A_a_stored_value_that_is_no_longer_accepted_does_not_refuse_a_change_of_the_other_field() {
+    tenants.tenants.put(A, Tenant.registerPending(A, "tenant-a", "Tenant", "America/Bogota", "ZZ", T0).completeOnboarding(MEMBERSHIP, TenantStatus.ACTIVE, T0));
+
+    assertThat(run(administratorOf(A), "America/Lima", null).timeZone()).isEqualTo("America/Lima");
+  }
+
+  @Test
   void D_the_zone_must_exist_and_the_country_must_be_a_known_code_and_one_of_them_is_needed() {
     assertThatThrownBy(() -> run(administratorOf(A), "Mars/Olympus", null))
         .isInstanceOfSatisfying(InvalidDataException.class, e -> assertThat(e.field()).isEqualTo("timeZone"));

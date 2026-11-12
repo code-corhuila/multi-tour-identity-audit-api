@@ -29,7 +29,9 @@ class AuditActionTest {
         // the exceptional access of the Platform Administrator to a tenant (spec 009)
         "PlatformExceptionalAccessOpened", "PlatformExceptionalAccessClosed",
         // each use of the token of that access (spec 012)
-        "PlatformExceptionalAccessUsed");
+        "PlatformExceptionalAccessUsed",
+        // the change of the zone or the country of a tenant (spec 010 of the API)
+        "TenantLocalizationChanged");
 
     assertThat(events).allSatisfy(event -> assertThat(AuditAction.isKnown(AuditAction.of(event))).as(event).isTrue());
     assertThat(AuditAction.KNOWN).as("no action without an event").hasSize(events.size());

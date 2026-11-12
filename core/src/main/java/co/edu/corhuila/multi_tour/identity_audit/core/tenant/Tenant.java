@@ -3,6 +3,8 @@ package co.edu.corhuila.multi_tour.identity_audit.core.tenant;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
+import java.util.Locale;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 /**
@@ -34,6 +36,8 @@ public record Tenant(
   private static final Pattern UUID_FORMAT =
       Pattern.compile("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}");
   private static final Pattern COUNTRY = Pattern.compile("[A-Z]{2}");
+  /** The two-letter codes of ISO 3166-1 that the platform accepts for a change; they decide the holidays of a country. */
+  private static final Set<String> ISO_COUNTRIES = Set.of(Locale.getISOCountries());
   private static final Pattern REGION =
       Pattern.compile("(Africa|America|Antarctica|Arctic|Asia|Atlantic|Australia|Europe|Indian|Pacific)/.+|UTC");
 
@@ -123,6 +127,28 @@ public record Tenant(
     return new Tenant(
         tenantId, identifier, commercialName, timeZone, country, createdAt, status,
         firstAdministratorMembershipId, statusChangedAt, statusChangedBy, statusReason, failedStep, at, identity);
+  }
+
+  /**
+   * The official zone and country, replacing the ones the tenant has and only from now on: nothing the tenant kept before is
+   * rewritten here. Only an active tenant takes them. A value that is not valid is refused naming the field.
+   */
+  public Tenant withLocalization(String newTimeZone, String newCountry, Instant now) {
+    // a value the tenant already holds is not checked again: only what the person sends can be refused
+    if (newTimeZone == null || !newTimeZone.equals(timeZone)
+        && (!REGION.matcher(newTimeZone).matches() || !ZoneId.getAvailableZoneIds().contains(newTimeZone))) {
+      throw new InvalidDataException("timeZone", "must be an existing time zone");
+    }
+    if (newCountry == null || !newCountry.equals(country) && !ISO_COUNTRIES.contains(newCountry)) {
+      throw new InvalidDataException("country", "must be a supported ISO 3166-1 code");
+    }
+    Instant at = moment(now);
+    if (status != TenantStatus.ACTIVE) {
+      throw new BusinessRuleViolationException("A " + status + " tenant cannot change its time zone or country");
+    }
+    return new Tenant(
+        tenantId, identifier, commercialName, newTimeZone, newCountry, createdAt, status,
+        firstAdministratorMembershipId, statusChangedAt, statusChangedBy, statusReason, failedStep, at, visualIdentity);
   }
 
   /** The only two changes that record who and why: one status to its opposite. */
