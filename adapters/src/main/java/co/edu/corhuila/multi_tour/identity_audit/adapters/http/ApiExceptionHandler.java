@@ -3,6 +3,7 @@ package co.edu.corhuila.multi_tour.identity_audit.adapters.http;
 import co.edu.corhuila.multi_tour.identity_audit.adapters.security.ForbiddenException;
 import co.edu.corhuila.multi_tour.identity_audit.core.security.CallerNotAllowedException;
 import co.edu.corhuila.multi_tour.identity_audit.core.tenant.BusinessRuleViolationException;
+import co.edu.corhuila.multi_tour.identity_audit.core.tenant.CashBoxesUnavailableException;
 import co.edu.corhuila.multi_tour.identity_audit.core.tenant.ConcurrentChangeException;
 import co.edu.corhuila.multi_tour.identity_audit.core.tenant.IdentifierTakenException;
 import co.edu.corhuila.multi_tour.identity_audit.core.tenant.InvalidDataException;
@@ -85,6 +86,13 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
   @ExceptionHandler(BusinessRuleViolationException.class)
   ResponseEntity<Object> businessRule(BusinessRuleViolationException e) {
     return answer(HttpStatus.UNPROCESSABLE_ENTITY, "BUSINESS_RULE_VIOLATION", e.getMessage(), null);
+  }
+
+  /** The other service that this change depends on did not answer: nothing was decided, and the caller may try again. */
+  @ExceptionHandler(CashBoxesUnavailableException.class)
+  ResponseEntity<Object> cashBoxesUnavailable(CashBoxesUnavailableException e) {
+    LOG.warn("The cash boxes could not be read: {}", e.getMessage());
+    return answer(HttpStatus.SERVICE_UNAVAILABLE, "SERVICE_UNAVAILABLE", e.getMessage(), null);
   }
 
   @ExceptionHandler(TenantNotFoundException.class)
