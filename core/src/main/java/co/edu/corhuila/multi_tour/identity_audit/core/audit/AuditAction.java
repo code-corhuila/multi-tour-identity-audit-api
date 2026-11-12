@@ -27,7 +27,13 @@ public final class AuditAction {
       // each use of the token of that access by the services (spec 012)
       "PLATFORM_EXCEPTIONAL_ACCESS_USED",
       // the change of the zone or the country of a tenant (spec 010 of the API, HU-IDA-004)
-      "TENANT_LOCALIZATION_CHANGED");
+      "TENANT_LOCALIZATION_CHANGED",
+      // the events of cash-reporting and of operations-cost, and the recovery of the password (spec 008, amended 2026-11-12)
+      "CASH_SESSION_OPENED", "CASH_SESSION_CLOSED", "CASH_SESSION_AUTO_CREATED", "CASH_SESSION_AUTO_CLOSED", "CASH_SESSION_REOPENED",
+      "CASH_INCOME_RECORDED", "OPERATIONAL_PAYMENT_RECORDED", "OPERATIONAL_EXPENSE_RECORDED", "REFUND_EXECUTED",
+      "SALIDA_SCHEDULED", "SALIDA_RESCHEDULED", "SALIDA_VEHICLES_CHANGED", "SALIDA_EXECUTION_STARTED", "SALIDA_FINALIZED",
+      "SALIDA_MARKED_PENDIENTE_DE_REGULARIZACION", "SALIDA_CANCELLED", "EXTRAORDINARY_CANCELLATION_RECORDED", "OPERATIONAL_COST_RECORDED",
+      "PASSWORD_RECOVERY_REQUESTED", "PASSWORD_RESET");
 
   private static final int MAX_LENGTH = 64;
   private static final Pattern EVENT_TYPE = Pattern.compile("[A-Z][A-Za-z0-9]{0,63}");
