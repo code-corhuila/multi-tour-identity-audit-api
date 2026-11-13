@@ -2,6 +2,7 @@ package co.edu.corhuila.multi_tour.identity_audit.app;
 
 import co.edu.corhuila.multi_tour.identity_audit.adapters.persistence.MongoDatabaseHealth;
 import co.edu.corhuila.multi_tour.identity_audit.adapters.persistence.MongoOutboxRepository;
+import co.edu.corhuila.multi_tour.identity_audit.adapters.persistence.MongoAuditAccessRepository;
 import co.edu.corhuila.multi_tour.identity_audit.adapters.persistence.MongoAuditRecordRepository;
 import co.edu.corhuila.multi_tour.identity_audit.adapters.persistence.MongoSessionCutoffRepository;
 import co.edu.corhuila.multi_tour.identity_audit.adapters.persistence.MongoTenantRepository;
@@ -11,7 +12,10 @@ import co.edu.corhuila.multi_tour.identity_audit.core.outbox.MarkEventPublished;
 import co.edu.corhuila.multi_tour.identity_audit.core.outbox.OutboxRepository;
 import co.edu.corhuila.multi_tour.identity_audit.core.outbox.RecordFailedAttempt;
 import co.edu.corhuila.multi_tour.identity_audit.core.outbox.RetryPolicy;
+import co.edu.corhuila.multi_tour.identity_audit.core.audit.AuditAccessSettings;
 import co.edu.corhuila.multi_tour.identity_audit.core.audit.AuditRecords;
+import co.edu.corhuila.multi_tour.identity_audit.core.audit.ChangeAuditAccess;
+import co.edu.corhuila.multi_tour.identity_audit.core.audit.ConsultAuditAccess;
 import co.edu.corhuila.multi_tour.identity_audit.core.audit.RecordPlatformEvent;
 import co.edu.corhuila.multi_tour.identity_audit.core.session.ApplySessionRevocation;
 import co.edu.corhuila.multi_tour.identity_audit.core.session.SessionCutoffs;
@@ -105,6 +109,21 @@ class CompositionRoot {
   @Bean
   RecordPlatformEvent recordPlatformEvent(AuditRecords records, IdGenerator ids) {
     return new RecordPlatformEvent(records, ids);
+  }
+
+  @Bean
+  AuditAccessSettings auditAccessSettings(MongoClient client, ConnectionString connection) {
+    return new MongoAuditAccessRepository(client, connection.getDatabase());
+  }
+
+  @Bean
+  ConsultAuditAccess consultAuditAccess(AuditAccessSettings settings) {
+    return new ConsultAuditAccess(settings);
+  }
+
+  @Bean
+  ChangeAuditAccess changeAuditAccess(AuditAccessSettings settings, Clock clock, IdGenerator ids) {
+    return new ChangeAuditAccess(settings, clock, ids);
   }
 
   @Bean

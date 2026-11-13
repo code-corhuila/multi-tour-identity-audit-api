@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Identity Audit API
-  version: 0.14.0
+  version: 0.15.0
   description: |
     The contract this service is tested against (ADR-004 D7). It grows with each operation, written before the
     code; the design contract lives in `07-api/contracts/openapi/identity-audit.yaml` of `multi-tour-docs`.
@@ -352,6 +352,78 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '500':
           $ref: '#/components/responses/Error'
+  /api/v1/identity-audit/tenant/audit-access:
+    get:
+      summary: The audit access of the optional roles of the caller's tenant
+      description: The three optional roles and whether each may consult the audit of the tenant named by the token's `tenantId` claim; a role never set is `false`. Always the three, so it is not paginated and has no `meta`. Role `TENANT_ADMINISTRATOR`; the Platform Administrator, a `SERVICE` and any other role are `403`.
+      operationId: listAuditAccess
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: The three optional roles, always all three
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    minItems: 3
+                    maxItems: 3
+                    items:
+                      $ref: '#/components/schemas/AuditAccessResponse'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+  /api/v1/identity-audit/tenant/audit-access/{role}:
+    put:
+      summary: Enable or remove the audit access of an optional role
+      description: Sets whether the role may consult the audit of the caller's tenant; the tenant never comes from the path or the body. A real change keeps, in the same transaction, the audit record `AUDIT_ACCESS_ENABLED` or `AUDIT_ACCESS_DISABLED` with who and when. It is idempotent by nature, so it takes no `Idempotency-Key`; setting what is already set answers `200` and records nothing. A role that is not one of the three, a field that is not declared or a missing `enabled` is `400`, and the value of the role is not repeated. Role `TENANT_ADMINISTRATOR`.
+      operationId: setAuditAccess
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: role
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/OptionalRole'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuditAccessRequest'
+      responses:
+        '200':
+          description: The access as it is now
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditAccessResponse'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '413':
+          $ref: '#/components/responses/Error'
+        '415':
+          $ref: '#/components/responses/Error'
+        '422':
+          description: The setting changed while the request was being decided twice in a row (`BUSINESS_RULE_VIOLATION`); the caller sends it again
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/Error'
   /api/v1/identity-audit/public/tenants/{identifier}:
     get:
       summary: Public profile of a tenant, behind the link /t/{identifier}
@@ -691,6 +763,24 @@ components:
           $ref: '#/components/schemas/HexColor'
         secondaryColor:
           $ref: '#/components/schemas/HexColor'
+    OptionalRole:
+      type: string
+      enum: [MANAGER, ACCOUNTANT, ANALYST]
+    AuditAccessRequest:
+      type: object
+      required: [enabled]
+      additionalProperties: false
+      properties:
+        enabled: {type: boolean}
+    AuditAccessResponse:
+      type: object
+      required: [role, enabled]
+      properties:
+        role:
+          $ref: '#/components/schemas/OptionalRole'
+        enabled: {type: boolean}
+        changedBy: {type: string, format: uuid, nullable: true, description: The account that changed it last; null if it was never set}
+        changedAt: {type: string, format: date-time, nullable: true}
     VisualIdentityRequest:
       type: object
       description: Both colors are always sent (PUT replaces); nothing else can be set
