@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Identity Audit API
-  version: 0.13.0
+  version: 0.14.0
   description: |
     The contract this service is tested against (ADR-004 D7). It grows with each operation, written before the
     code; the design contract lives in `07-api/contracts/openapi/identity-audit.yaml` of `multi-tour-docs`.
@@ -384,14 +384,19 @@ paths:
           $ref: '#/components/responses/Error'
   /api/v1/identity-audit/internal/tenants/{tenantId}/events:
     post:
-      summary: Receive a session revocation
+      summary: Receive an event of another service
       description: |
-        Job 7 delivers `AccountSessionsRevoked` of the security microservice (ADR-004 D4 and D5): the payload names
-        the account and the time from which its sessions no longer count. The service keeps, per account, the latest
-        cutoff it received and answers `401` to a token of that account issued before it. The `Idempotency-Key` is the
-        id of the event. The first time is `201`; a repeat of the event id, or an event older than the cutoff already
-        kept, is `200` and changes nothing. The tenant of the path must be the one of the event. Only the role
-        `SERVICE`. The body is tolerant of fields it does not name, up to 16 KB.
+        Job 7 delivers the events of the security microservice (ADR-004 D4 and D5). Each one becomes one audit record
+        (HU-IDA-002 AC1): the action is the event type in SCREAMING_SNAKE_CASE, the actor is `actorId` or, when the
+        event has none, `multi-tour-security`, the record affected is `accounts/{aggregateId}` (`tenants/{aggregateId}`
+        for the optional-role events), the new value is the payload, the time is `occurredAt`, and `previousValue`,
+        `channelOrModule` and `functionalProcessReference` are read from the payload when it has them (AC2).
+        `AccountSessionsRevoked` also names, in its payload, the account and the time from which its sessions no longer
+        count: the service keeps, per account, the latest cutoff it received and answers `401` to a token of that
+        account issued before it. The `Idempotency-Key` is the id of the event. The first time is `201`; a repeat of
+        the event id is `200` and keeps nothing new (AC7), and so is a revocation older than the cutoff already kept.
+        The tenant of the path must be the one of the event. Only the role `SERVICE`. The body is tolerant of fields it
+        does not name, up to 16 KB.
       operationId: receiveSessionEvent
       security:
         - bearerAuth: []
@@ -403,12 +408,12 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/SessionEventEnvelope'
+              $ref: '#/components/schemas/PlatformEventEnvelope'
       responses:
         '201':
-          description: The event was applied
+          description: The event was recorded
         '200':
-          description: The event changed nothing, because it was already received or an older one
+          description: The event was already received, or it is a revocation older than the cutoff already kept
         '400':
           $ref: '#/components/responses/Error'
         '401':
@@ -722,24 +727,31 @@ components:
           description: Trimmed; no control character, new lines included; at most 1000 UTF-16 units
           minLength: 1
           maxLength: 1000
-    SessionEventEnvelope:
+    PlatformEventEnvelope:
       type: object
-      description: The envelope of ADR-004 D4 as job 7 delivers it; fields it does not name are tolerated
+      description: |
+        The envelope of ADR-004 D4 as job 7 delivers it; fields it does not name are tolerated. The payload of
+        `AccountSessionsRevoked` must carry `accountId` and `revokedFrom` (RFC 3339 in UTC), or the event is `400`; any
+        other payload is kept as it comes, as the new value of the record.
       required: [eventId, eventType, eventVersion, aggregateId, payload, occurredAt]
       additionalProperties: true
       properties:
         eventId: {type: string, format: uuid}
-        eventType: {type: string, enum: [AccountSessionsRevoked]}
+        eventType:
+          type: string
+          pattern: '^[A-Z][A-Za-z0-9]{0,63}$'
+          description: Any type the relay routes here; today the six events of the security microservice
+          example: SpecialPermissionGranted
         eventVersion: {type: integer, minimum: 1}
         tenantId: {type: string, format: uuid}
-        aggregateId: {type: string, format: uuid, description: The account whose sessions were revoked}
+        aggregateId: {type: string, format: uuid, description: "The account the event is about, or the tenant for the optional-role events"}
+        actorId: {type: string, nullable: true, description: Who did it; absent when the publisher did it on its own}
+        reason: {type: string, nullable: true}
+        correlationId: {type: string}
         payload:
           type: object
-          required: [accountId, revokedFrom]
           additionalProperties: true
-          properties:
-            accountId: {type: string, format: uuid}
-            revokedFrom: {type: string, format: date-time}
+          description: The full new state of the aggregate; never a credential
         occurredAt: {type: string, format: date-time}
     OutboxEvent:
       type: object

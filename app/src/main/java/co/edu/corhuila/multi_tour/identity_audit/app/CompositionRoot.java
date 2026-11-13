@@ -2,6 +2,7 @@ package co.edu.corhuila.multi_tour.identity_audit.app;
 
 import co.edu.corhuila.multi_tour.identity_audit.adapters.persistence.MongoDatabaseHealth;
 import co.edu.corhuila.multi_tour.identity_audit.adapters.persistence.MongoOutboxRepository;
+import co.edu.corhuila.multi_tour.identity_audit.adapters.persistence.MongoAuditRecordRepository;
 import co.edu.corhuila.multi_tour.identity_audit.adapters.persistence.MongoSessionCutoffRepository;
 import co.edu.corhuila.multi_tour.identity_audit.adapters.persistence.MongoTenantRepository;
 import co.edu.corhuila.multi_tour.identity_audit.core.health.DatabaseHealth;
@@ -10,6 +11,8 @@ import co.edu.corhuila.multi_tour.identity_audit.core.outbox.MarkEventPublished;
 import co.edu.corhuila.multi_tour.identity_audit.core.outbox.OutboxRepository;
 import co.edu.corhuila.multi_tour.identity_audit.core.outbox.RecordFailedAttempt;
 import co.edu.corhuila.multi_tour.identity_audit.core.outbox.RetryPolicy;
+import co.edu.corhuila.multi_tour.identity_audit.core.audit.AuditRecords;
+import co.edu.corhuila.multi_tour.identity_audit.core.audit.RecordPlatformEvent;
 import co.edu.corhuila.multi_tour.identity_audit.core.session.ApplySessionRevocation;
 import co.edu.corhuila.multi_tour.identity_audit.core.session.SessionCutoffs;
 import co.edu.corhuila.multi_tour.identity_audit.core.tenant.CompleteOnboarding;
@@ -92,6 +95,16 @@ class CompositionRoot {
   @Bean
   ApplySessionRevocation applySessionRevocation(SessionCutoffs cutoffs, Clock clock) {
     return new ApplySessionRevocation(cutoffs, clock);
+  }
+
+  @Bean
+  AuditRecords auditRecords(MongoClient client, ConnectionString connection) {
+    return new MongoAuditRecordRepository(client, connection.getDatabase());
+  }
+
+  @Bean
+  RecordPlatformEvent recordPlatformEvent(AuditRecords records, IdGenerator ids) {
+    return new RecordPlatformEvent(records, ids);
   }
 
   @Bean

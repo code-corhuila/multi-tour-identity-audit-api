@@ -34,7 +34,7 @@ class MongoSessionEventRouteTest extends ShellTest {
 
   @BeforeEach
   void aCleanDatabase() {
-    for (String collection : List.of("tenants", "outbox_events", "idempotency_keys", "processed_events", "account_session_cutoffs")) {
+    for (String collection : List.of("tenants", "outbox_events", "idempotency_keys", "processed_events", "account_session_cutoffs", "audit_records")) {
       client.getDatabase(database).getCollection(collection).deleteMany(new Document());
     }
   }
@@ -109,8 +109,8 @@ class MongoSessionEventRouteTest extends ShellTest {
     Instant at = Instant.parse("2026-10-24T10:00:00Z");
     Map<String, Object> noPayload = event(id, at);
     noPayload.remove("payload");
-    Map<String, Object> wrongType = event(id, at);
-    wrongType.put("eventType", "TenantInactivated");
+    Map<String, Object> notAName = event(id, at);
+    notAName.put("eventType", "not a name");
     Map<String, Object> badAccount = event(id, at);
     badAccount.put("payload", Map.of("accountId", "not-a-uuid", "revokedFrom", at.toString()));
     Map<String, Object> badDate = event(id, at);
@@ -120,7 +120,7 @@ class MongoSessionEventRouteTest extends ShellTest {
     Map<String, Object> otherAggregate = event(id, at);
     otherAggregate.put("aggregateId", "0b0b0b0b-0b0b-4b0b-8b0b-0b0b0b0b0b0b");
 
-    for (Map<String, Object> bad : List.of(noPayload, wrongType, badAccount, badDate, otherTenant, otherAggregate)) {
+    for (Map<String, Object> bad : List.of(noPayload, notAName, badAccount, badDate, otherTenant, otherAggregate)) {
       Response answer = refused(service(), bad, id);
       assertThat(answer.statusCode()).as("%s", answer.asString()).isEqualTo(400);
       assertThat(answer.jsonPath().getString("error")).isEqualTo("VALIDATION_ERROR");
