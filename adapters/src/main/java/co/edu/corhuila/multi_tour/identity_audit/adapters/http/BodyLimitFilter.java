@@ -1,6 +1,9 @@
 package co.edu.corhuila.multi_tour.identity_audit.adapters.http;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import co.edu.corhuila.multi_tour.identity_audit.adapters.security.JwtAuthFilter;
+import co.edu.corhuila.multi_tour.identity_audit.core.security.Caller;
+import co.edu.corhuila.multi_tour.identity_audit.core.security.Role;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ReadListener;
 import jakarta.servlet.ServletException;
@@ -15,6 +18,7 @@ import java.io.InputStreamReader;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.Set;
+import java.util.regex.Pattern;
 import org.slf4j.MDC;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
@@ -24,7 +28,9 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 /**
- * No body is read beyond 16 KB (Annex C, explicit limits): the largest of the contract is under 4 KB. A body
+ * No body is read beyond 16 KB (Annex C, explicit limits): the largest of the contract is under 4 KB, except the two routes
+ * that receive the logo and the commercial images, which take up to 1.5 MB (spec 012, RN-IDA-API-126: a file of 1 MB in
+ * base64 is about 1.4 MB). A body
  * over the limit is a 413 with the common envelope before anyone parses it; a smaller one is kept and handed on,
  * so a request that declares no length (sent in chunks) is judged by what arrives. It runs after the token filter,
  * so a caller without a token is told so before anything of its body is read; a caller with a token but without
@@ -36,6 +42,10 @@ import org.springframework.web.filter.OncePerRequestFilter;
 public class BodyLimitFilter extends OncePerRequestFilter {
 
   static final int LIMIT = 16 * 1024;
+  /** What the two file routes take: the largest file (1 MB) written in base64, with room for the rest of the JSON. */
+  static final int FILE_LIMIT = 1536 * 1024;
+  private static final String FILE_ROUTE = "/api/v1/identity-audit/tenant/logo";
+  private static final Pattern FILE_ROUTES = Pattern.compile("/api/v1/identity-audit/tenant/images/[0-9]{1,9}");
   private static final Set<String> WITH_BODY = Set.of("POST", "PUT", "PATCH", "DELETE");
 
   private final ObjectMapper mapper;
@@ -52,16 +62,27 @@ public class BodyLimitFilter extends OncePerRequestFilter {
   @Override
   protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
       throws ServletException, IOException {
-    if (request.getContentLengthLong() > LIMIT) {
+    int limit = limitOf(request);
+    if (request.getContentLengthLong() > limit) {
       refuse(response);
       return;
     }
-    byte[] body = request.getInputStream().readNBytes(LIMIT + 1);
-    if (body.length > LIMIT) {
+    byte[] body = request.getInputStream().readNBytes(limit + 1);
+    if (body.length > limit) {
       refuse(response);
       return;
     }
     chain.doFilter(new Replay(request, body), response);
+  }
+
+  private static int limitOf(HttpServletRequest request) {
+    String uri = request.getRequestURI();
+    boolean fileRoute = "PUT".equals(request.getMethod()) && (uri.equals(FILE_ROUTE) || FILE_ROUTES.matcher(uri).matches());
+    // only the caller who may save a file is let to send one: every other caller is judged by 16 KB, so the body that
+    // would be refused anyway is never held in memory (the token filter has already run)
+    boolean mayWrite = request.getAttribute(JwtAuthFilter.CALLER) instanceof Caller who
+        && who.roles().contains(Role.TENANT_ADMINISTRATOR) && !who.exceptionalAccess();
+    return fileRoute && mayWrite ? FILE_LIMIT : LIMIT;
   }
 
   private void refuse(HttpServletResponse response) throws IOException {
