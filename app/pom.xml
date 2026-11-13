@@ -13,6 +13,7 @@
   <artifactId>identity-audit-app</artifactId>
 
   <properties>
+    <!-- Not re-measured in API-12: this module's TestRestTemplate needs a real loopback socket, unavailable in some CI runners. -->
     <coverage.floor>0.93</coverage.floor>
   </properties>
 
