@@ -1,6 +1,6 @@
 package co.edu.corhuila.multi_tour.identity_audit.core.tenant;
 
-/** A live tenant already has the identifier (a 422 BUSINESS_RULE_VIOLATION that names it). */
+/** A live tenant already has the identifier; the refusal names it. */
 public class IdentifierTakenException extends RuntimeException {
 
   private final String identifier;
