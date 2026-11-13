@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Identity Audit API
-  version: 0.22.0
+  version: 0.23.0
   description: |
     The contract this service is tested against (ADR-004 D7). It grows with each operation, written before the
     code; the design contract lives in `07-api/contracts/openapi/identity-audit.yaml` of `multi-tour-docs`.
@@ -769,6 +769,76 @@ paths:
           $ref: '#/components/responses/Error'
         '500':
           $ref: '#/components/responses/Error'
+  /api/v1/identity-audit/public/tenants/{identifier}/logo:
+    parameters:
+      - name: identifier
+        in: path
+        required: true
+        schema: {type: string}
+      - name: v
+        in: query
+        required: false
+        schema: {type: string}
+        description: The start of the hash of the file; it only makes a replaced file a new url, and it is ignored here
+    get:
+      summary: The logo of a tenant
+      description: No sign-in. An unknown or unfinished tenant, or one without a logo, is `404`; an inactive tenant is served.
+      operationId: getPublicTenantLogo
+      responses:
+        '200':
+          description: The file, with the kind that was proved
+          headers:
+            X-Content-Type-Options: {schema: {type: string}}
+            Content-Security-Policy: {schema: {type: string}}
+            Content-Disposition: {schema: {type: string}}
+            Cache-Control: {schema: {type: string}}
+          content:
+            image/png: {schema: {type: string, format: binary}}
+            image/jpeg: {schema: {type: string, format: binary}}
+            image/webp: {schema: {type: string, format: binary}}
+        '401':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+  /api/v1/identity-audit/public/tenants/{identifier}/images/{position}:
+    parameters:
+      - name: identifier
+        in: path
+        required: true
+        schema: {type: string}
+      - name: position
+        in: path
+        required: true
+        schema: {type: string}
+      - name: v
+        in: query
+        required: false
+        schema: {type: string}
+        description: The start of the hash of the file; it only makes a replaced file a new url, and it is ignored here
+    get:
+      summary: A commercial image of a tenant
+      description: Same rules as the logo.
+      operationId: getPublicTenantImage
+      responses:
+        '200':
+          description: The file, with the kind that was proved
+          headers:
+            X-Content-Type-Options: {schema: {type: string}}
+            Content-Security-Policy: {schema: {type: string}}
+            Content-Disposition: {schema: {type: string}}
+            Cache-Control: {schema: {type: string}}
+          content:
+            image/png: {schema: {type: string, format: binary}}
+            image/jpeg: {schema: {type: string, format: binary}}
+            image/webp: {schema: {type: string, format: binary}}
+        '401':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
   /api/v1/identity-audit/public/tenants/{identifier}:
     get:
       summary: Public profile of a tenant, behind the link /t/{identifier}
@@ -1167,6 +1237,19 @@ components:
           enum: [ACTIVE, INACTIVE]
         visualIdentity:
           $ref: '#/components/schemas/VisualIdentity'
+        logoUrl:
+          type: string
+          nullable: true
+        images:
+          type: array
+          maxItems: 5
+          items:
+            type: object
+            required: [position, url]
+            additionalProperties: false
+            properties:
+              position: {type: integer, minimum: 0, maximum: 4}
+              url: {type: string}
     HexColor:
       type: string
       pattern: '^#[0-9A-Fa-f]{6}$'
