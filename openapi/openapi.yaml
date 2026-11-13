@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Identity Audit API
-  version: 0.12.0
+  version: 0.13.0
   description: |
     The contract this service is tested against (ADR-004 D7). It grows with each operation, written before the
     code; the design contract lives in `07-api/contracts/openapi/identity-audit.yaml` of `multi-tour-docs`.
@@ -382,6 +382,51 @@ paths:
           $ref: '#/components/responses/Error'
         '500':
           $ref: '#/components/responses/Error'
+  /api/v1/identity-audit/internal/tenants/{tenantId}/events:
+    post:
+      summary: Receive a session revocation
+      description: |
+        Job 7 delivers `AccountSessionsRevoked` of the security microservice (ADR-004 D4 and D5): the payload names
+        the account and the time from which its sessions no longer count. The service keeps, per account, the latest
+        cutoff it received and answers `401` to a token of that account issued before it. The `Idempotency-Key` is the
+        id of the event. The first time is `201`; a repeat of the event id, or an event older than the cutoff already
+        kept, is `200` and changes nothing. The tenant of the path must be the one of the event. Only the role
+        `SERVICE`. The body is tolerant of fields it does not name, up to 16 KB.
+      operationId: receiveSessionEvent
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/TenantIdPath'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SessionEventEnvelope'
+      responses:
+        '201':
+          description: The event was applied
+        '200':
+          description: The event changed nothing, because it was already received or an older one
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '413':
+          $ref: '#/components/responses/Error'
+        '415':
+          $ref: '#/components/responses/Error'
+        '422':
+          description: The change lost the race twice in a row (`BUSINESS_RULE_VIOLATION`); the caller sends it again
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/Error'
   /api/v1/identity-audit/internal/outbox:
     get:
       summary: Read the events waiting, for job 7
@@ -677,6 +722,25 @@ components:
           description: Trimmed; no control character, new lines included; at most 1000 UTF-16 units
           minLength: 1
           maxLength: 1000
+    SessionEventEnvelope:
+      type: object
+      description: The envelope of ADR-004 D4 as job 7 delivers it; fields it does not name are tolerated
+      required: [eventId, eventType, eventVersion, aggregateId, payload, occurredAt]
+      additionalProperties: true
+      properties:
+        eventId: {type: string, format: uuid}
+        eventType: {type: string, enum: [AccountSessionsRevoked]}
+        eventVersion: {type: integer, minimum: 1}
+        tenantId: {type: string, format: uuid}
+        aggregateId: {type: string, format: uuid, description: The account whose sessions were revoked}
+        payload:
+          type: object
+          required: [accountId, revokedFrom]
+          additionalProperties: true
+          properties:
+            accountId: {type: string, format: uuid}
+            revokedFrom: {type: string, format: date-time}
+        occurredAt: {type: string, format: date-time}
     OutboxEvent:
       type: object
       description: An event waiting to be delivered, with the envelope of ADR-004 D4
