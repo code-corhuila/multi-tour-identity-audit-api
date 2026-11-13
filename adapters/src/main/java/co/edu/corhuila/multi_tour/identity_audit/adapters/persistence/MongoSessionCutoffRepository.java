@@ -3,9 +3,11 @@ package co.edu.corhuila.multi_tour.identity_audit.adapters.persistence;
 import static com.mongodb.client.model.Filters.and;
 import static com.mongodb.client.model.Filters.eq;
 
+import co.edu.corhuila.multi_tour.identity_audit.core.audit.AuditRecord;
 import co.edu.corhuila.multi_tour.identity_audit.core.session.SessionCutoff;
 import co.edu.corhuila.multi_tour.identity_audit.core.session.SessionCutoffs;
 import co.edu.corhuila.multi_tour.identity_audit.core.tenant.ConcurrentChangeException;
+import co.edu.corhuila.multi_tour.identity_audit.core.tenant.InvalidDataException;
 import com.mongodb.ErrorCategory;
 import com.mongodb.MongoWriteException;
 import com.mongodb.ReadConcern;
@@ -18,16 +20,21 @@ import java.time.Instant;
 import java.util.Date;
 import java.util.Optional;
 import org.bson.Document;
+import org.bson.codecs.configuration.CodecConfigurationException;
 
 /**
- * The cutoffs in {@code account_session_cutoffs} and the event ids in {@code processed_events}. The id and the cutoff go
- * in one transaction, so that a repeat never sees the id without its effect.
+ * The cutoffs in {@code account_session_cutoffs}, the event ids in {@code processed_events} and the audit record of the
+ * event in {@code audit_records}. The three go in one transaction, so that a repeat never sees the id without its effect
+ * and an effect never goes without its evidence.
  */
 public final class MongoSessionCutoffRepository implements SessionCutoffs {
 
   /** A committed write must survive a failover, whatever the URI of the connection says. */
   private static final TransactionOptions DURABLE =
       TransactionOptions.builder().readConcern(ReadConcern.MAJORITY).writeConcern(WriteConcern.MAJORITY).build();
+
+  /** The unique index of identity-audit-db that holds one audit record per event. */
+  private static final String EVENT_ID_INDEX = "ux_audit_records_event_id";
 
   private final MongoClient client;
   private final String database;
@@ -52,6 +59,10 @@ public final class MongoSessionCutoffRepository implements SessionCutoffs {
     }
   }
 
+  private MongoCollection<Document> audits() {
+    return client.getDatabase(database).getCollection("audit_records");
+  }
+
   @Override
   public Optional<SessionCutoff> find(String accountId) {
     Document stored = ReadLimit.of(cutoffs().find(eq("_id", accountId))).first();
@@ -59,7 +70,7 @@ public final class MongoSessionCutoffRepository implements SessionCutoffs {
   }
 
   @Override
-  public boolean record(String eventId, SessionCutoff expected, SessionCutoff next, Instant now) {
+  public boolean record(String eventId, SessionCutoff expected, SessionCutoff next, Instant now, AuditRecord audit) {
     try (ClientSession session = client.startSession()) {
       session.withTransaction(() -> {
         try {
@@ -84,11 +95,23 @@ public final class MongoSessionCutoffRepository implements SessionCutoffs {
             throw new ConcurrentChangeException("account session cutoff", next.accountId());
           }
         }
+        try {
+          audits().insertOne(session, MongoAuditRecordRepository.toDocument(audit));
+        } catch (MongoWriteException e) {
+          // The event already has a record: either another delivery got there first, or its id was purged from
+          // processed_events (job 6) while the audit, which is never purged, kept it. Only the index of the event id means
+          // that; a collision of the record id is not "already applied" and must not hide that the cutoff was not kept.
+          throw e.getError().getCategory() == ErrorCategory.DUPLICATE_KEY && e.getError().getMessage().contains(EVENT_ID_INDEX)
+              ? new AlreadyApplied() : e;
+        }
         return null;
       }, DURABLE);
       return true;
     } catch (AlreadyApplied repeated) {
       return false;
+    } catch (CodecConfigurationException unsupported) {
+      // a value of the payload the driver cannot encode aborts the transaction: neither the cutoff nor the id is kept
+      throw new InvalidDataException("payload", "holds a value that cannot be kept");
     }
   }
 

@@ -159,6 +159,60 @@ class MongoSessionEventRouteTest extends ShellTest {
     assertThat(cutoff().getDate("updatedAt")).as("a repeat rewrites nothing").isEqualTo(updatedAt);
   }
 
+  private long records(String eventId) {
+    return client.getDatabase(database).getCollection("audit_records").countDocuments(new Document("eventId", eventId));
+  }
+
+  @Test
+  void C_a_revocation_without_its_time_is_400_because_the_record_needs_it() {
+    String id = newId();
+    Map<String, Object> body = event(id, Instant.parse("2026-10-24T10:00:00Z"));
+    body.remove("occurredAt");
+
+    Response answer = refused(service(), body, id);
+
+    assertThat(answer.statusCode()).as("%s", answer.asString()).isEqualTo(400);
+    assertThat(cutoff()).as("and it is not applied").isNull();
+  }
+
+  @Test
+  void I_a_revocation_keeps_its_cutoff_and_its_record_together() {
+    String id = newId();
+    String older = newId();
+    Instant t20 = Instant.parse("2026-10-24T20:00:00Z");
+    Instant t10 = Instant.parse("2026-10-24T10:00:00Z");
+
+    assertThat(deliver(id, event(id, t20)).statusCode()).isEqualTo(201);
+
+    Document kept = client.getDatabase(database).getCollection("audit_records").find(new Document("eventId", id)).first();
+    assertThat(kept.getString("action")).isEqualTo("ACCOUNT_SESSIONS_REVOKED");
+    assertThat(kept.getString("affectedRecordId")).isEqualTo("accounts/" + ACCOUNT);
+    assertThat(kept.getString("tenantId")).isEqualTo(TENANT);
+    assertThat(kept.getString("actorId")).isEqualTo("multi-tour-security");
+    assertThat(kept.getDate("recordedAt")).isEqualTo(Date.from(t20));
+    assertThat(cutoff().getDate("revokedFrom").toInstant()).isEqualTo(t20);
+
+    assertThat(deliver(id, event(id, t20)).statusCode()).as("a repeat").isEqualTo(200);
+    assertThat(deliver(older, event(older, t10)).statusCode()).as("an older event").isEqualTo(200);
+    assertThat(records(id)).as("a repeat keeps one record").isEqualTo(1);
+    assertThat(records(older)).as("an older event still leaves its record").isEqualTo(1);
+    assertThat(cutoff().getDate("revokedFrom").toInstant()).as("and does not move the cutoff").isEqualTo(t20);
+  }
+
+  @Test
+  void I_a_revocation_whose_record_cannot_be_kept_leaves_no_cutoff_and_no_processed_id() {
+    String id = newId();
+    Map<String, Object> body = event(id, Instant.parse("2026-10-24T10:00:00Z"));
+    body.put("payload", Map.of("accountId", ACCOUNT, "revokedFrom", "2026-10-24T10:00:00Z",
+        "amount", new java.math.BigInteger("1" + "0".repeat(30))));
+
+    assertThat(refused(service(), body, id).statusCode()).isEqualTo(400);
+
+    assertThat(cutoff()).as("both or neither").isNull();
+    assertThat(client.getDatabase(database).getCollection("processed_events").countDocuments(new Document("_id", id))).isZero();
+    assertThat(records(id)).isZero();
+  }
+
   @Test
   void I_an_older_event_leaves_the_newer_cutoff() {
     Instant t10 = Instant.parse("2026-10-24T10:00:00Z");

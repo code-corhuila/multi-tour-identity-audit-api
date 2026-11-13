@@ -3,6 +3,7 @@ package co.edu.corhuila.multi_tour.identity_audit.app;
 import static io.restassured.RestAssured.given;
 import static org.assertj.core.api.Assertions.assertThat;
 
+import co.edu.corhuila.multi_tour.identity_audit.core.audit.AuditRecord;
 import co.edu.corhuila.multi_tour.identity_audit.core.session.SessionCutoff;
 import co.edu.corhuila.multi_tour.identity_audit.core.session.SessionCutoffs;
 import io.restassured.response.Response;
@@ -31,7 +32,7 @@ class TokenCutoffLookupFailsTest extends ShellTest {
         }
 
         @Override
-        public boolean record(String eventId, SessionCutoff expected, SessionCutoff next, Instant now) {
+        public boolean record(String eventId, SessionCutoff expected, SessionCutoff next, Instant now, AuditRecord audit) {
           throw new IllegalStateException("the database does not answer");
         }
       };

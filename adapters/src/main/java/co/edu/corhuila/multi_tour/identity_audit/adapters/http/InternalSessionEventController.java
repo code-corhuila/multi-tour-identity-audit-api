@@ -49,13 +49,14 @@ class InternalSessionEventController {
     if (!tenantId.equals(body.tenantId())) {
       throw new InvalidDataException("tenantId", "must be the tenant of the path");
     }
+    PlatformEvent event = new PlatformEvent(body.eventId(), body.eventType(), body.tenantId(), body.aggregateId(),
+        body.actorId(), body.reason(), body.payload(), occurredAt(body.occurredAt()));
     if (ApplySessionRevocation.EVENT_TYPE.equals(body.eventType())) {
       ApplySessionRevocation.Outcome outcome = apply.execute(new ApplySessionRevocation.Command(body.eventId(), body.eventType(),
-          body.tenantId(), body.aggregateId(), text(body.payload().get("accountId")), text(body.payload().get("revokedFrom"))));
+          body.tenantId(), body.aggregateId(), text(body.payload().get("accountId")), text(body.payload().get("revokedFrom"))), event);
       return ResponseEntity.status(outcome == ApplySessionRevocation.Outcome.APPLIED ? HttpStatus.CREATED : HttpStatus.OK).build();
     }
-    RecordPlatformEvent.Outcome outcome = record.execute(new PlatformEvent(body.eventId(), body.eventType(), body.tenantId(),
-        body.aggregateId(), body.actorId(), body.reason(), body.payload(), occurredAt(body.occurredAt())));
+    RecordPlatformEvent.Outcome outcome = record.execute(event);
     return ResponseEntity.status(outcome == RecordPlatformEvent.Outcome.RECORDED ? HttpStatus.CREATED : HttpStatus.OK).build();
   }
 
