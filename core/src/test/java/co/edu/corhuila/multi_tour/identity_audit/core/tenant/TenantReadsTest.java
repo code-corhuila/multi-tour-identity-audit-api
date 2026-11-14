@@ -16,7 +16,7 @@ class TenantReadsTest {
   private final InMemoryTenants tenants = new InMemoryTenants();
   private final ListTenants list = new ListTenants(tenants);
   private final ConsultTenant consult = new ConsultTenant(tenants);
-  private final GetPublicProfile profile = new GetPublicProfile(tenants);
+  private final GetPublicProfile profile = new GetPublicProfile(tenants, new InMemoryTenantImages());
 
   private static String id(int n) {
     return "00000000-0000-4000-8000-%012d".formatted(n);
@@ -86,7 +86,7 @@ class TenantReadsTest {
 
   @Test
   void A_the_public_profile_shows_name_identifier_and_status_of_an_active_or_inactive_tenant() {
-    assertThat(profile.execute("tenant-2")).isEqualTo(new PublicTenantProfile("Tenant 2", "tenant-2", TenantStatus.ACTIVE, null));
+    assertThat(profile.execute("tenant-2")).isEqualTo(new PublicTenantProfile("Tenant 2", "tenant-2", TenantStatus.ACTIVE, null, null, java.util.List.of()));
     assertThat(profile.execute("tenant-1").status()).isEqualTo(TenantStatus.INACTIVE);
   }
 
@@ -98,9 +98,9 @@ class TenantReadsTest {
   }
 
   @Test
-  void A_the_public_profile_reveals_nothing_beyond_name_identifier_status_and_visual_identity() {
+  void A_the_public_profile_reveals_nothing_beyond_name_identifier_status_visual_identity_logo_and_images() {
     assertThat(PublicTenantProfile.class.getRecordComponents()).extracting("name")
-        .containsExactly("commercialName", "identifier", "status", "visualIdentity");
+        .containsExactly("commercialName", "identifier", "status", "visualIdentity", "logo", "images");
   }
 
   @Test
