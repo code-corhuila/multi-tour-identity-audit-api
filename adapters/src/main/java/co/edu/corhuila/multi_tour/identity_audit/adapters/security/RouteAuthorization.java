@@ -22,6 +22,8 @@ public final class RouteAuthorization implements HandlerInterceptor {
   private static final String VISUAL_IDENTITY = "/api/v1/identity-audit/tenant/visual-identity";
   private static final String AUDIT_ACCESS = "/api/v1/identity-audit/tenant/audit-access";
   private static final String LOCALIZATION = "/api/v1/identity-audit/tenant/localization";
+  private static final String LOGO = "/api/v1/identity-audit/tenant/logo";
+  private static final String IMAGES = "/api/v1/identity-audit/tenant/images/";
   /** The audit of one tenant: every role of a tenant gets to the use case, which judges the tenant first and the role after. */
   private static final Pattern TENANT_AUDIT = Pattern.compile("/api/v1/identity-audit/tenants/[^/]+/audit-records");
   /** The same audit, of the tenant named by the token: the same roles reach the use case. */
@@ -46,7 +48,8 @@ public final class RouteAuthorization implements HandlerInterceptor {
     if (uri.startsWith(INTERNAL)) {
       return Set.of(Role.SERVICE);
     }
-    if (uri.equals(VISUAL_IDENTITY) || uri.equals(LOCALIZATION) || uri.equals(AUDIT_ACCESS) || uri.startsWith(AUDIT_ACCESS + "/")) {
+    if (uri.equals(VISUAL_IDENTITY) || uri.equals(LOCALIZATION) || uri.equals(LOGO) || uri.startsWith(IMAGES)
+        || uri.equals(AUDIT_ACCESS) || uri.startsWith(AUDIT_ACCESS + "/")) {
       return Set.of(Role.TENANT_ADMINISTRATOR);
     }
     return TENANT_AUDIT.matcher(uri).matches() || uri.equals(OWN_AUDIT) ? TENANT_USERS : Set.of(Role.PLATFORM_ADMINISTRATOR);
