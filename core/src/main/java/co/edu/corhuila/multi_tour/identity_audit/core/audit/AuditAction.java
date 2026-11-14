@@ -25,7 +25,9 @@ public final class AuditAction {
       // the exceptional access of the Platform Administrator to a tenant (spec 009)
       "PLATFORM_EXCEPTIONAL_ACCESS_OPENED", "PLATFORM_EXCEPTIONAL_ACCESS_CLOSED",
       // each use of the token of that access by the services (spec 012)
-      "PLATFORM_EXCEPTIONAL_ACCESS_USED");
+      "PLATFORM_EXCEPTIONAL_ACCESS_USED",
+      // the change of the zone or the country of a tenant (spec 010 of the API, HU-IDA-004)
+      "TENANT_LOCALIZATION_CHANGED");
 
   private static final int MAX_LENGTH = 64;
   private static final Pattern EVENT_TYPE = Pattern.compile("[A-Z][A-Za-z0-9]{0,63}");

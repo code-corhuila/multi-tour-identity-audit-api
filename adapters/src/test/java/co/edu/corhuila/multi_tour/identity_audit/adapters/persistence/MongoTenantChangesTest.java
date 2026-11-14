@@ -98,6 +98,59 @@ class MongoTenantChangesTest {
     assertThat(event.get("payload", Document.class).getString("identifier")).isEqualTo("acme-tours");
   }
 
+  private Tenant activeTenant(int n, String identifier) {
+    Tenant pending = stored(n, identifier);
+    Tenant active = pending.completeOnboarding(MEMBERSHIP, TenantStatus.ACTIVE, LATER);
+    tenants.update(pending, active, List.of(event(n, TenantEventType.TENANT_CREATED, active, LATER)));
+    return active;
+  }
+
+  // Spec 010 RN-IDA-API-105: the new zone and country, the event that tells the others and the record of the audit are one write.
+  @Test
+  void I_the_change_and_its_event_are_written_together() {
+    Tenant active = activeTenant(1, "acme-tours");
+    Tenant moved = active.withLocalization("America/Mexico_City", "MX", LATER.plusSeconds(5));
+    TenantEvent changed = new TenantEvent("00000000-0000-4000-8000-0000000e0099", TenantEventType.TENANT_LOCALIZATION_CHANGED, moved,
+        "00000000-0000-4000-8000-0000000000cc", "corr-loc", moved.updatedAt(), active);
+
+    tenants.update(active, moved, List.of(changed));
+
+    assertThat(tenants.findById(active.tenantId())).contains(moved);
+    Document event = client.getDatabase(url.getDatabase()).getCollection("outbox_events").find(new Document("eventType", "TenantLocalizationChanged")).first();
+    assertThat(event.getString("aggregateId")).isEqualTo(active.tenantId());
+    assertThat(event.getString("actorId")).isEqualTo("00000000-0000-4000-8000-0000000000cc");
+    Document payload = event.get("payload", Document.class);
+    assertThat(payload.getString("previousTimeZone")).isEqualTo("America/Bogota");
+    assertThat(payload.getString("previousCountry")).isEqualTo("CO");
+    assertThat(payload.getString("timeZone")).isEqualTo("America/Mexico_City");
+    assertThat(payload.getString("country")).isEqualTo("MX");
+    assertThat(payload.getString("changedBy")).isEqualTo("00000000-0000-4000-8000-0000000000cc");
+    assertThat(payload.getString("effectiveAt")).isEqualTo(moved.updatedAt().toString());
+    assertThat(payload.getString("tenantId")).isEqualTo(active.tenantId());
+    Document audit = client.getDatabase(url.getDatabase()).getCollection("audit_records").find(new Document("action", "TENANT_LOCALIZATION_CHANGED")).first();
+    assertThat(audit.getString("affectedRecordId")).isEqualTo("tenants/" + active.tenantId());
+    assertThat(audit.get("previousValue", Document.class).getString("timeZone")).isEqualTo("America/Bogota");
+    assertThat(audit.get("newValue", Document.class).getString("country")).isEqualTo("MX");
+  }
+
+  // Spec 010 RN-IDA-API-107: two changes decided on the same state, even in the same millisecond, leave one state and one event.
+  @Test
+  void I_a_lost_race_leaves_one_state_and_one_event() {
+    Tenant active = activeTenant(1, "acme-tours");
+    Instant same = LATER; // the very instant of the state the two changes were decided on
+    Tenant toMexico = active.withLocalization("America/Mexico_City", "MX", same);
+    Tenant toPeru = active.withLocalization("America/Lima", "PE", same);
+    tenants.update(active, toMexico, List.of(new TenantEvent("00000000-0000-4000-8000-0000000e0098", TenantEventType.TENANT_LOCALIZATION_CHANGED,
+        toMexico, "00000000-0000-4000-8000-0000000000cc", "corr-a", same, active)));
+
+    assertThatThrownBy(() -> tenants.update(active, toPeru, List.of(new TenantEvent("00000000-0000-4000-8000-0000000e0097",
+        TenantEventType.TENANT_LOCALIZATION_CHANGED, toPeru, "00000000-0000-4000-8000-0000000000cc", "corr-b", same, active))))
+        .isInstanceOf(ConcurrentChangeException.class);
+
+    assertThat(tenants.findById(active.tenantId())).contains(toMexico);
+    assertThat(client.getDatabase(url.getDatabase()).getCollection("outbox_events").countDocuments(new Document("eventType", "TenantLocalizationChanged"))).isEqualTo(1);
+  }
+
   @Test
   void I_a_tenant_change_and_its_audit_record_are_written_together() {
     Tenant pending = stored(1, "acme-tours");

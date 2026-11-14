@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Identity Audit API
-  version: 0.19.0
+  version: 0.20.0
   description: |
     The contract this service is tested against (ADR-004 D7). It grows with each operation, written before the
     code; the design contract lives in `07-api/contracts/openapi/identity-audit.yaml` of `multi-tour-docs`.
@@ -352,6 +352,52 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '500':
           $ref: '#/components/responses/Error'
+  /api/v1/identity-audit/tenant/localization:
+    put:
+      summary: Change the time zone and the country of the caller's tenant
+      description: Changes the official time zone, the country, or both, of the tenant named by the token's `tenantId` claim, from now on only (HU-IDA-004); the path and the body name no tenant. The same values answer `200` and change nothing, and no `Idempotency-Key` is asked because nothing is created. At least one field is sent; a field that is not declared, a zone that is not an existing IANA name or a country that is not a supported ISO 3166-1 code is `400` naming the field. A change of zone is `422 BUSINESS_RULE_VIOLATION` while any cash box of the tenant is open or pending closing, and an inactive tenant is `422` too; a change of country alone is not blocked by cash. If the cash boxes cannot be read the answer is `503` and nothing changes. Role `TENANT_ADMINISTRATOR`; the Platform Administrator, a `SERVICE`, any other role and the token of an exceptional or emergency access are `403`.
+      operationId: changeTenantLocalization
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LocalizationRequest'
+      responses:
+        '200':
+          description: The tenant with its current zone and country
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantResponse'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '413':
+          $ref: '#/components/responses/Error'
+        '415':
+          $ref: '#/components/responses/Error'
+        '422':
+          description: The tenant is not active, or a cash box is open or pending closing (`BUSINESS_RULE_VIOLATION`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/Error'
+        '503':
+          description: The state of the cash boxes could not be read, so nothing changed (`SERVICE_UNAVAILABLE`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/v1/identity-audit/tenant/audit-access:
     get:
       summary: The audit access of the optional roles of the caller's tenant
@@ -1005,6 +1051,18 @@ components:
           $ref: '#/components/schemas/HexColor'
         secondaryColor:
           $ref: '#/components/schemas/HexColor'
+    LocalizationRequest:
+      type: object
+      description: At least one of the two fields; nothing else can be set
+      minProperties: 1
+      additionalProperties: false
+      properties:
+        timeZone:
+          type: string
+          maxLength: 64
+        country:
+          type: string
+          pattern: '^[A-Z]{2}$'
     OutboxPage:
       type: object
       required: [data, meta]

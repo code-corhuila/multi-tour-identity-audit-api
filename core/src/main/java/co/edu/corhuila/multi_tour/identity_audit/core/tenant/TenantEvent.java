@@ -11,13 +11,22 @@ import java.util.Map;
  * form leaves out the tenant's free text.
  */
 public record TenantEvent(
-    String eventId, TenantEventType type, Tenant tenant, String actor, String correlationId, Instant occurredAt) {
+    String eventId, TenantEventType type, Tenant tenant, String actor, String correlationId, Instant occurredAt,
+    Tenant previous) {
+
+  /** An event with no previous state to tell: the creation and the changes of status. */
+  public TenantEvent(String eventId, TenantEventType type, Tenant tenant, String actor, String correlationId, Instant occurredAt) {
+    this(eventId, type, tenant, actor, correlationId, occurredAt, null);
+  }
 
   public TenantEvent {
     if (eventId == null || type == null || tenant == null || occurredAt == null) {
       throw new InvalidDataException("An event has an id, a type, a tenant and a time");
     }
     requireWho(actor, correlationId);
+    if (type == TenantEventType.TENANT_LOCALIZATION_CHANGED && previous == null) {
+      throw new InvalidDataException("A change of localization tells the previous state");
+    }
   }
 
   /**
@@ -40,6 +49,12 @@ public record TenantEvent(
    * has the id of the event, so the record and the event that tells the platform are one fact seen twice.
    */
   public AuditRecord toAuditRecord(String auditRecordId, Tenant previous) {
+    if (type == TenantEventType.TENANT_LOCALIZATION_CHANGED) {
+      // the zone and the country before and after, and the user (the instant is the one of the record): HU-IDA-004 AC4 and AC5
+      return new AuditRecord(auditRecordId, eventId, tenant.tenantId(), actor, AuditAction.of(type.eventType()),
+          "tenants/" + tenant.tenantId(), null, Map.of("timeZone", this.previous.timeZone(), "country", this.previous.country()),
+          Map.of("timeZone", tenant.timeZone(), "country", tenant.country()), null, null, occurredAt);
+    }
     return new AuditRecord(auditRecordId, eventId, tenant.tenantId(), actor, AuditAction.of(type.eventType()),
         "tenants/" + tenant.tenantId(), tenant.statusReason(), Map.of("tenantStatus", previous.status().name()),
         Map.of("tenantStatus", tenant.status().name()), null, null, occurredAt);
