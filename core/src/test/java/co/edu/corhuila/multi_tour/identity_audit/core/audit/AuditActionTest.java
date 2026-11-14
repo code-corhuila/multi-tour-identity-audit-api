@@ -31,7 +31,13 @@ class AuditActionTest {
         // each use of the token of that access (spec 012)
         "PlatformExceptionalAccessUsed",
         // the change of the zone or the country of a tenant (spec 010 of the API)
-        "TenantLocalizationChanged");
+        "TenantLocalizationChanged",
+        // the events of cash-reporting and of operations-cost, and the recovery of the password (spec 008, amended 2026-11-12)
+        "CashSessionOpened", "CashSessionClosed", "CashSessionAutoCreated", "CashSessionAutoClosed", "CashSessionReopened",
+        "CashIncomeRecorded", "OperationalPaymentRecorded", "OperationalExpenseRecorded", "RefundExecuted",
+        "SalidaScheduled", "SalidaRescheduled", "SalidaVehiclesChanged", "SalidaExecutionStarted", "SalidaFinalized",
+        "SalidaMarkedPendienteDeRegularizacion", "SalidaCancelled", "ExtraordinaryCancellationRecorded", "OperationalCostRecorded",
+        "PasswordRecoveryRequested", "PasswordReset", "PasswordResetFailed");
 
     assertThat(events).allSatisfy(event -> assertThat(AuditAction.isKnown(AuditAction.of(event))).as(event).isTrue());
     assertThat(AuditAction.KNOWN).as("no action without an event").hasSize(events.size());
