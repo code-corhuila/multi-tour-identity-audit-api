@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Identity Audit API
-  version: 0.20.0
+  version: 0.21.0
   description: |
     The contract this service is tested against (ADR-004 D7). It grows with each operation, written before the
     code; the design contract lives in `07-api/contracts/openapi/identity-audit.yaml` of `multi-tour-docs`.
@@ -36,6 +36,37 @@ paths:
                         enum: [ok, down]
                         description: Whether the database answered a ping within 2 s; a database that is down does not make the answer a 503
   /api/v1/identity-audit/internal/tenants:
+    get:
+      summary: List the tenants with their status, for the services
+      description: Only `tenantId` and `status` of each tenant. `status` is `ACTIVE`, `INACTIVE` or `ALL` (default, every status). Paged, newest first. Role `SERVICE`; a person is `403`.
+      operationId: listTenantsForServices
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema: {type: integer, minimum: 1, default: 1}
+        - name: limit
+          in: query
+          schema: {type: integer, minimum: 1, maximum: 100, default: 20}
+        - name: status
+          in: query
+          schema: {type: string, enum: [ACTIVE, INACTIVE, ALL], default: ALL}
+      responses:
+        '200':
+          description: One page of tenants
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceTenantPage'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
     post:
       summary: Step 1 of onboard-tenant, create the tenant as pending
       description: A repeat of the same `Idempotency-Key` answers `200` with the first tenant, whatever the body says now. Role `SERVICE`.
@@ -957,6 +988,27 @@ components:
         failedStep:
           type: string
           enum: [CREATE_ACCOUNT, APPLY_STATUS]
+    ServiceTenantPage:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: array
+          items:
+            type: object
+            required: [tenantId, status]
+            additionalProperties: false
+            properties:
+              tenantId: {type: string, format: uuid}
+              status: {type: string, enum: [PENDING, ACTIVE, INACTIVE, FAILED]}
+        meta:
+          type: object
+          required: [page, limit, total, totalPages]
+          properties:
+            page: {type: integer, minimum: 1}
+            limit: {type: integer, minimum: 1, maximum: 100}
+            total: {type: integer, minimum: 0}
+            totalPages: {type: integer, minimum: 0}
     TenantPage:
       type: object
       required: [data, meta]
