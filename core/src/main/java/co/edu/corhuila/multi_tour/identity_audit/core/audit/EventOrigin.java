@@ -20,6 +20,7 @@ final class EventOrigin {
   private static final Origin RESERVATION = new Origin(RESERVATION_SERVICE, "reservations/");
   private static final Origin CUSTOMER = new Origin(RESERVATION_SERVICE, "customers/");
   private static final Origin DISCOUNT_RULE = new Origin(RESERVATION_SERVICE, "discount-rules/");
+  private static final Origin SUPPORT_ACCESS = new Origin(SECURITY_SERVICE, "support-accesses/");
 
   private static final Map<String, Origin> BY_TYPE = Map.ofEntries(
       Map.entry("OptionalRoleEnabled", TENANT),
@@ -37,7 +38,10 @@ final class EventOrigin {
       Map.entry("ClientNotified", RESERVATION),
       Map.entry("CustomerRegistered", CUSTOMER),
       Map.entry("SensitiveDataAccessed", CUSTOMER),
-      Map.entry("DiscountRuleChanged", DISCOUNT_RULE));
+      Map.entry("DiscountRuleChanged", DISCOUNT_RULE),
+      Map.entry("PlatformExceptionalAccessOpened", SUPPORT_ACCESS),
+      Map.entry("PlatformExceptionalAccessClosed", SUPPORT_ACCESS),
+      Map.entry("PlatformExceptionalAccessUsed", SUPPORT_ACCESS));
 
   private EventOrigin() {}
 

@@ -25,10 +25,25 @@ class AuditActionTest {
         // the events of other services that the audit records (spec 008)
         "AccountEmailVerified", "ReservationCreated", "ReservationModified", "CapacityAllocated", "CapacityReleased",
         "PaymentEvidenceRegistered", "PaymentValidated", "PaymentRejected", "ReservationConfirmed", "ReservationCancelled",
-        "RefundAuthorized", "ClientNotified", "CustomerRegistered", "DiscountRuleChanged", "SensitiveDataAccessed");
+        "RefundAuthorized", "ClientNotified", "CustomerRegistered", "DiscountRuleChanged", "SensitiveDataAccessed",
+        // the exceptional access of the Platform Administrator to a tenant (spec 009)
+        "PlatformExceptionalAccessOpened", "PlatformExceptionalAccessClosed",
+        // each use of the token of that access (spec 012)
+        "PlatformExceptionalAccessUsed");
 
     assertThat(events).allSatisfy(event -> assertThat(AuditAction.isKnown(AuditAction.of(event))).as(event).isTrue());
     assertThat(AuditAction.KNOWN).as("no action without an event").hasSize(events.size());
+  }
+
+  @Test
+  void D_the_support_access_actions_are_known() {
+    assertThat(AuditAction.of("PlatformExceptionalAccessOpened")).isEqualTo("PLATFORM_EXCEPTIONAL_ACCESS_OPENED");
+    assertThat(AuditAction.of("PlatformExceptionalAccessClosed")).isEqualTo("PLATFORM_EXCEPTIONAL_ACCESS_CLOSED");
+    assertThat(AuditAction.isKnown("PLATFORM_EXCEPTIONAL_ACCESS_OPENED")).isTrue();
+    assertThat(AuditAction.isKnown("PLATFORM_EXCEPTIONAL_ACCESS_CLOSED")).isTrue();
+    // spec 012: each use of the token of an access
+    assertThat(AuditAction.isKnown("PLATFORM_EXCEPTIONAL_ACCESS_USED")).isTrue();
+    assertThat(AuditAction.of("PlatformExceptionalAccessUsed")).isEqualTo("PLATFORM_EXCEPTIONAL_ACCESS_USED");
   }
 
   @Test
