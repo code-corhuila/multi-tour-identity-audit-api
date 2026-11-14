@@ -132,6 +132,19 @@ class MongoAuditListRouteTest extends ShellTest {
   }
 
   @Test
+  void C_filter_by_a_support_access_action() {
+    seed(1, TENANT, "PLATFORM_EXCEPTIONAL_ACCESS_OPENED");
+    seed(2, TENANT, "ACCOUNT_BLOCKED");
+    seed(3, TENANT, "PLATFORM_EXCEPTIONAL_ACCESS_CLOSED");
+
+    assertThat(read(as("TENANT_ADMINISTRATOR", TENANT), OF_TENANT + "?action=PLATFORM_EXCEPTIONAL_ACCESS_OPENED").jsonPath().getList("data.auditRecordId"))
+        .containsExactly(id(1));
+    assertThat(read(as("TENANT_ADMINISTRATOR", TENANT), OF_TENANT + "?action=PLATFORM_EXCEPTIONAL_ACCESS_CLOSED").jsonPath().getList("data.auditRecordId"))
+        .containsExactly(id(3));
+    assertThat(refused(as("TENANT_ADMINISTRATOR", TENANT), OF_TENANT + "?action=PLATFORM_EXCEPTIONAL_ACCESS_NOPE").statusCode()).isEqualTo(400);
+  }
+
+  @Test
   void C_another_tenants_audit_is_404_whatever_the_role_and_the_access() {
     seed(1, OTHER, "ACCOUNT_BLOCKED");
     assertThat(as("TENANT_ADMINISTRATOR", TENANT).body(Map.of("enabled", true)).put(ACCESS + "MANAGER").statusCode()).isEqualTo(200);
