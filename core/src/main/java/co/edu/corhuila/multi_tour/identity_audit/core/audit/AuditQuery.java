@@ -11,6 +11,8 @@ import java.util.regex.Pattern;
  */
 public record AuditQuery(String tenantId, Instant from, Instant to, String action, int page, int limit) {
 
+  private static final Instant EARLIEST = Instant.parse("0000-01-01T00:00:00Z");
+  private static final Instant LATEST = Instant.parse("9999-12-31T23:59:59.999999999Z");
   private static final Pattern UUID_FORMAT =
       Pattern.compile("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}");
 
@@ -24,8 +26,17 @@ public record AuditQuery(String tenantId, Instant from, Instant to, String actio
     if (action != null && !AuditAction.isKnown(action)) {
       throw new InvalidDataException("action", "is not an action of the audit");
     }
+    inTheRange("from", from);
+    inTheRange("to", to);
     if (from != null && to != null && to.isBefore(from)) {
       throw new InvalidDataException("to", "must not be before from");
+    }
+  }
+
+  /** A date beyond the years 0000 to 9999 is no date of the audit, and the database could not even be asked about it. */
+  private static void inTheRange(String field, Instant at) {
+    if (at != null && (at.isBefore(EARLIEST) || at.isAfter(LATEST))) {
+      throw new InvalidDataException(field, "must be a date between the years 0000 and 9999");
     }
   }
 

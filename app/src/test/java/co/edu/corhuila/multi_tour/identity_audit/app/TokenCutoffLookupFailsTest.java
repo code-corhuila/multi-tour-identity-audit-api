@@ -43,7 +43,7 @@ class TokenCutoffLookupFailsTest extends ShellTest {
   void C_a_lookup_that_fails_never_lets_the_token_through() {
     String token = Tokens.valid(Tokens.claims("account-1", 600, List.of("PLATFORM_ADMINISTRATOR"), null));
 
-    Response answer = given().header("Authorization", "Bearer " + token).get("/api/v1/identity-audit/tenants/not-built/audit-records");
+    Response answer = given().header("Authorization", "Bearer " + token).get("/api/v1/identity-audit/not-built");
 
     assertThat(answer.statusCode()).as("%s", answer.asString()).isEqualTo(500);
     assertThat(answer.jsonPath().getString("error")).isEqualTo("INTERNAL_ERROR");
