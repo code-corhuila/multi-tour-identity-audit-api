@@ -27,4 +27,12 @@ class EnvExampleTest {
     assertThat(lines()).filteredOn(line -> line.startsWith("JWT_PUBLIC_KEY=")).containsExactly("JWT_PUBLIC_KEY=");
     assertThat(String.join("\n", lines())).doesNotContain("BEGIN").doesNotContain("password");
   }
+
+  // Spec 010 (HU-IDA-004): the zone changes only after reading the cash boxes of another service, with the token of this one.
+  @Test
+  void C_the_example_and_the_compose_name_the_cash_reporting_address_and_the_service_token_without_a_value() throws IOException {
+    assertThat(lines()).contains("CASH_REPORTING_BASE_URL=", "SERVICE_TOKEN=");
+    String compose = String.join(System.lineSeparator(), Files.readAllLines(Path.of("..", "deploy", "compose.yml")));
+    assertThat(compose).contains("CASH_REPORTING_BASE_URL: ${CASH_REPORTING_BASE_URL:-}").contains("SERVICE_TOKEN: ${SERVICE_TOKEN:-}");
+  }
 }
