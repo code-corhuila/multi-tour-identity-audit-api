@@ -13,9 +13,12 @@ import co.edu.corhuila.multi_tour.identity_audit.core.outbox.OutboxRepository;
 import co.edu.corhuila.multi_tour.identity_audit.core.outbox.RecordFailedAttempt;
 import co.edu.corhuila.multi_tour.identity_audit.core.outbox.RetryPolicy;
 import co.edu.corhuila.multi_tour.identity_audit.core.audit.AuditAccessSettings;
+import co.edu.corhuila.multi_tour.identity_audit.core.audit.AuditReader;
 import co.edu.corhuila.multi_tour.identity_audit.core.audit.AuditRecords;
 import co.edu.corhuila.multi_tour.identity_audit.core.audit.ChangeAuditAccess;
 import co.edu.corhuila.multi_tour.identity_audit.core.audit.ConsultAuditAccess;
+import co.edu.corhuila.multi_tour.identity_audit.core.audit.ListPlatformAudit;
+import co.edu.corhuila.multi_tour.identity_audit.core.audit.ListTenantAudit;
 import co.edu.corhuila.multi_tour.identity_audit.core.audit.RecordPlatformEvent;
 import co.edu.corhuila.multi_tour.identity_audit.core.session.ApplySessionRevocation;
 import co.edu.corhuila.multi_tour.identity_audit.core.session.SessionCutoffs;
@@ -101,9 +104,20 @@ class CompositionRoot {
     return new ApplySessionRevocation(cutoffs, clock, ids);
   }
 
+  /** One adapter for the two ports, the one that writes the audit and the one that reads it, so each is injected from this bean. */
   @Bean
-  AuditRecords auditRecords(MongoClient client, ConnectionString connection) {
+  MongoAuditRecordRepository auditRecordRepository(MongoClient client, ConnectionString connection) {
     return new MongoAuditRecordRepository(client, connection.getDatabase());
+  }
+
+  @Bean
+  ListPlatformAudit listPlatformAudit(AuditReader reader) {
+    return new ListPlatformAudit(reader);
+  }
+
+  @Bean
+  ListTenantAudit listTenantAudit(AuditReader reader, AuditAccessSettings settings) {
+    return new ListTenantAudit(reader, settings);
   }
 
   @Bean

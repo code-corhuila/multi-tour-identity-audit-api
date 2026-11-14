@@ -60,6 +60,24 @@ class RouteAuthorizationTest {
   }
 
   @Test
+  void C_the_audit_of_one_tenant_is_for_every_role_of_a_tenant_and_nothing_else_of_the_platform_opens_to_them() {
+    String tenant = "00000000-0000-4000-8000-00000000000a";
+    String audit = "/api/v1/identity-audit/tenants/" + tenant + "/audit-records";
+    for (Role role : new Role[] {Role.TENANT_ADMINISTRATOR, Role.MANAGER, Role.ACCOUNTANT, Role.ANALYST, Role.OPERATIONAL_COLLABORATOR, Role.FINAL_CUSTOMER}) {
+      Caller user = new Caller("account-3", tenant, Set.of(role));
+      assertThatCode(() -> passes(audit, user)).as("%s reaches the use case", role).doesNotThrowAnyException();
+      for (String platformOnly : new String[] {PLATFORM, PLATFORM + "/" + tenant, PLATFORM + "/" + tenant + "/inactivate",
+          "/api/v1/identity-audit/audit-records", audit + "/x", audit + "/", "/api/v1/identity-audit/tenants//audit-records", audit + ";x=1",
+          "/api/v1/identity-audit/tenants/%2e/audit-records"}) {
+        assertThatThrownBy(() -> passes(platformOnly, user)).as("%s on %s", role, platformOnly).isInstanceOf(ForbiddenException.class);
+      }
+    }
+    assertThatThrownBy(() -> passes(audit, ADMIN)).as("the Platform Administrator uses its own route").isInstanceOf(ForbiddenException.class);
+    assertThatThrownBy(() -> passes(audit, SERVICE)).isInstanceOf(ForbiddenException.class);
+    assertThatCode(() -> passes("/api/v1/identity-audit/audit-records", ADMIN)).doesNotThrowAnyException();
+  }
+
+  @Test
   void C_the_visual_identity_route_is_for_the_tenant_administrator_and_only_for_it() {
     Caller tenantAdmin = new Caller("account-2", "00000000-0000-4000-8000-00000000000a", Set.of(Role.TENANT_ADMINISTRATOR));
     String route = "/api/v1/identity-audit/tenant/visual-identity";

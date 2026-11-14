@@ -4,12 +4,14 @@ import co.edu.corhuila.multi_tour.identity_audit.core.security.Caller;
 import co.edu.corhuila.multi_tour.identity_audit.core.security.Role;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import java.util.Set;
+import java.util.regex.Pattern;
 import org.springframework.web.servlet.HandlerInterceptor;
 
 /**
  * Judges the role before the handler reads the request: {@code /internal/} routes answer only {@code SERVICE}
  * (ADR-004 D5), the visual identity and the audit access of a tenant only its Tenant Administrator (RN-IDA-API-22,
- * RN-IDA-API-43), every other route
+ * RN-IDA-API-43), the audit of one tenant every role of a tenant (RN-IDA-API-42), every other route
  * with a token only the Platform Administrator (RN-IDA-API-01). The role is
  * chosen on the path as it is written, while the route that answers is chosen on the normalized one, so a path
  * written in a disguised way (see {@link RouteGuard#isDisguised}) is refused to everyone: no route needs one.
@@ -19,19 +21,29 @@ public final class RouteAuthorization implements HandlerInterceptor {
   private static final String INTERNAL = "/api/v1/identity-audit/internal/";
   private static final String VISUAL_IDENTITY = "/api/v1/identity-audit/tenant/visual-identity";
   private static final String AUDIT_ACCESS = "/api/v1/identity-audit/tenant/audit-access";
+  /** The audit of one tenant: every role of a tenant gets to the use case, which judges the tenant first and the role after. */
+  private static final Pattern TENANT_AUDIT = Pattern.compile("/api/v1/identity-audit/tenants/[^/]+/audit-records");
+  private static final Set<Role> TENANT_USERS = Set.of(Role.TENANT_ADMINISTRATOR, Role.MANAGER, Role.ACCOUNTANT, Role.ANALYST,
+      Role.OPERATIONAL_COLLABORATOR, Role.FINAL_CUSTOMER);
 
   @Override
   public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
     String uri = request.getRequestURI();
-    Role required = uri.startsWith(INTERNAL)
-        ? Role.SERVICE
-        : uri.equals(VISUAL_IDENTITY) || uri.equals(AUDIT_ACCESS) || uri.startsWith(AUDIT_ACCESS + "/")
-            ? Role.TENANT_ADMINISTRATOR : Role.PLATFORM_ADMINISTRATOR;
     if (RouteGuard.isDisguised(uri)
         || !(request.getAttribute(JwtAuthFilter.CALLER) instanceof Caller who)
-        || !who.roles().contains(required)) {
+        || who.roles().stream().noneMatch(allowedOn(uri)::contains)) {
       throw new ForbiddenException();
     }
     return true;
+  }
+
+  private static Set<Role> allowedOn(String uri) {
+    if (uri.startsWith(INTERNAL)) {
+      return Set.of(Role.SERVICE);
+    }
+    if (uri.equals(VISUAL_IDENTITY) || uri.equals(AUDIT_ACCESS) || uri.startsWith(AUDIT_ACCESS + "/")) {
+      return Set.of(Role.TENANT_ADMINISTRATOR);
+    }
+    return TENANT_AUDIT.matcher(uri).matches() ? TENANT_USERS : Set.of(Role.PLATFORM_ADMINISTRATOR);
   }
 }

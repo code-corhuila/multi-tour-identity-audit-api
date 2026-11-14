@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Identity Audit API
-  version: 0.15.0
+  version: 0.16.0
   description: |
     The contract this service is tested against (ADR-004 D7). It grows with each operation, written before the
     code; the design contract lives in `07-api/contracts/openapi/identity-audit.yaml` of `multi-tour-docs`.
@@ -424,6 +424,99 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '500':
           $ref: '#/components/responses/Error'
+  /api/v1/identity-audit/audit-records:
+    get:
+      summary: List the audit across tenants
+      description: The audit records of every tenant, newest first, and by id among equal times. `tenantId` narrows it to one tenant. A `limit` outside 1 to 100, a `page` below 1, a period that ends before it starts, an action that does not exist, a filter that is not declared or one sent twice is `400`. Role `PLATFORM_ADMINISTRATOR`; a user of a tenant, of any role, and a `SERVICE` are `403`.
+      operationId: listPlatformAuditRecords
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tenantId
+          in: query
+          description: Only the records of this tenant
+          schema: {type: string, format: uuid}
+        - name: page
+          in: query
+          schema: {type: integer, minimum: 1, default: 1}
+        - name: limit
+          in: query
+          schema: {type: integer, minimum: 1, maximum: 100, default: 20}
+        - name: from
+          in: query
+          description: Start of the period, RFC 3339 in UTC, inclusive
+          schema: {type: string, format: date-time}
+        - name: to
+          in: query
+          description: End of the period, RFC 3339 in UTC, exclusive; before `from` is `400`
+          schema: {type: string, format: date-time}
+        - name: action
+          in: query
+          description: Only the records of this action; any other is `400`
+          schema:
+            type: string
+            enum: [ACCOUNT_SESSIONS_REVOKED, ACCOUNT_BLOCKED, SPECIAL_PERMISSION_GRANTED, SPECIAL_PERMISSION_REVOKED, OPTIONAL_ROLE_ENABLED, OPTIONAL_ROLE_DISABLED, TENANT_CREATED, TENANT_INACTIVATED, TENANT_REACTIVATED, AUDIT_ACCESS_ENABLED, AUDIT_ACCESS_DISABLED]
+      responses:
+        '200':
+          description: One page of audit records
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditRecordPage'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+  /api/v1/identity-audit/tenants/{tenantId}/audit-records:
+    get:
+      summary: List the audit of one tenant
+      description: The audit records of the tenant, newest first. Read by its `TENANT_ADMINISTRATOR`, and by a `MANAGER`, `ACCOUNTANT` or `ANALYST` only while the audit access of their role is enabled in that tenant. The tenant of the path must be the token's `tenantId`; another tenant is `404` for every role, judged before the role. The Platform Administrator, a `SERVICE`, a collaborator and a final customer are `403`. A query that is malformed is `400` whoever asks. A filter that is not declared, `tenantId` included, is `400`.
+      operationId: listAuditRecords
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/TenantIdPath'
+        - name: page
+          in: query
+          schema: {type: integer, minimum: 1, default: 1}
+        - name: limit
+          in: query
+          schema: {type: integer, minimum: 1, maximum: 100, default: 20}
+        - name: from
+          in: query
+          description: Start of the period, RFC 3339 in UTC, inclusive
+          schema: {type: string, format: date-time}
+        - name: to
+          in: query
+          description: End of the period, RFC 3339 in UTC, exclusive; before `from` is `400`
+          schema: {type: string, format: date-time}
+        - name: action
+          in: query
+          description: Only the records of this action; any other is `400`
+          schema:
+            type: string
+            enum: [ACCOUNT_SESSIONS_REVOKED, ACCOUNT_BLOCKED, SPECIAL_PERMISSION_GRANTED, SPECIAL_PERMISSION_REVOKED, OPTIONAL_ROLE_ENABLED, OPTIONAL_ROLE_DISABLED, TENANT_CREATED, TENANT_INACTIVATED, TENANT_REACTIVATED, AUDIT_ACCESS_ENABLED, AUDIT_ACCESS_DISABLED]
+      responses:
+        '200':
+          description: One page of audit records
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditRecordPage'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
   /api/v1/identity-audit/public/tenants/{identifier}:
     get:
       summary: Public profile of a tenant, behind the link /t/{identifier}
@@ -763,6 +856,38 @@ components:
           $ref: '#/components/schemas/HexColor'
         secondaryColor:
           $ref: '#/components/schemas/HexColor'
+    AuditRecordResponse:
+      type: object
+      description: Immutable audit evidence; `tenantId` is null for an action of the platform
+      required: [auditRecordId, tenantId, actorId, action, affectedRecordId, recordedAt]
+      properties:
+        auditRecordId: {type: string, format: uuid}
+        tenantId: {type: string, format: uuid, nullable: true}
+        actorId: {type: string, description: The account id of the person or the name of the service that did it}
+        action: {type: string, description: The type of the event in SCREAMING_SNAKE_CASE; a publisher that is new may bring one that is not in the list of the filter}
+        affectedRecordId: {type: string}
+        reason: {type: string, nullable: true}
+        previousValue: {type: object, nullable: true, additionalProperties: true}
+        newValue: {type: object, nullable: true, additionalProperties: true}
+        channelOrModule: {type: string, nullable: true}
+        functionalProcessReference: {type: string, nullable: true}
+        recordedAt: {type: string, format: date-time}
+    AuditRecordPage:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditRecordResponse'
+        meta:
+          type: object
+          required: [page, limit, total, totalPages]
+          properties:
+            page: {type: integer, minimum: 1}
+            limit: {type: integer, minimum: 1, maximum: 100}
+            total: {type: integer, minimum: 0}
+            totalPages: {type: integer, minimum: 0}
     OptionalRole:
       type: string
       enum: [MANAGER, ACCOUNTANT, ANALYST]

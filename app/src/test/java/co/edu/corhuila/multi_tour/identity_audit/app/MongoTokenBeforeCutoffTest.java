@@ -28,7 +28,7 @@ class MongoTokenBeforeCutoffTest extends ShellTest {
   private static final String OTHER_ACCOUNT = "1c2d3e4f-5a6b-4c7d-8e9f-0a1b2c3d4e5f";
   private static final String EVENTS = "/api/v1/identity-audit/internal/tenants/" + TENANT + "/events";
   /** A protected route that is not built, so passing the filter shows as the 404 of an unknown route. */
-  private static final String PROTECTED = "/api/v1/identity-audit/tenants/not-built/audit-records";
+  private static final String PROTECTED = "/api/v1/identity-audit/not-built";
   /** A second-precision instant, as the {@code iat} of a token is. */
   private static final Instant R = Instant.now().truncatedTo(java.time.temporal.ChronoUnit.SECONDS);
 

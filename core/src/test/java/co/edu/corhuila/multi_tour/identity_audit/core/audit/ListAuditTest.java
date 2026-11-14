@@ -94,6 +94,11 @@ class ListAuditTest {
     assertThatThrownBy(() -> new AuditQuery(null, TO, FROM, null, 1, 20)).isInstanceOf(InvalidDataException.class)
         .extracting(e -> ((InvalidDataException) e).field()).isEqualTo("to");
     assertThatThrownBy(() -> new AuditQuery("not-a-uuid", null, null, null, 1, 20)).isInstanceOf(InvalidDataException.class);
+    assertThatThrownBy(() -> new AuditQuery(null, Instant.MAX, null, null, 1, 20)).as("a date the database cannot hold")
+        .isInstanceOf(InvalidDataException.class).extracting(e -> ((InvalidDataException) e).field()).isEqualTo("from");
+    assertThatThrownBy(() -> new AuditQuery(null, null, Instant.MIN, null, 1, 20)).isInstanceOf(InvalidDataException.class)
+        .extracting(e -> ((InvalidDataException) e).field()).isEqualTo("to");
+    assertThat(new AuditQuery(null, Instant.parse("0000-01-01T00:00:00Z"), Instant.parse("9999-12-31T23:59:59Z"), null, 1, 20)).isNotNull();
 
     assertThat(new AuditQuery(null, FROM, FROM, null, 1, 100)).as("an empty period is a period, and the limit may be 100").isNotNull();
     assertThat(new AuditQuery(null, null, null, "AUDIT_ACCESS_ENABLED", 1, 1)).isNotNull();
