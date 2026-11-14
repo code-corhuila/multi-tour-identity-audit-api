@@ -5,6 +5,7 @@ import co.edu.corhuila.multi_tour.identity_audit.adapters.persistence.MongoOutbo
 import co.edu.corhuila.multi_tour.identity_audit.adapters.persistence.MongoAuditAccessRepository;
 import co.edu.corhuila.multi_tour.identity_audit.adapters.persistence.MongoAuditRecordRepository;
 import co.edu.corhuila.multi_tour.identity_audit.adapters.persistence.MongoSessionCutoffRepository;
+import co.edu.corhuila.multi_tour.identity_audit.adapters.persistence.MongoTenantImageRepository;
 import co.edu.corhuila.multi_tour.identity_audit.adapters.persistence.MongoTenantRepository;
 import co.edu.corhuila.multi_tour.identity_audit.core.health.DatabaseHealth;
 import co.edu.corhuila.multi_tour.identity_audit.core.outbox.ListDueEvents;
@@ -31,7 +32,10 @@ import co.edu.corhuila.multi_tour.identity_audit.core.tenant.InactivateTenant;
 import co.edu.corhuila.multi_tour.identity_audit.core.tenant.ListTenants;
 import co.edu.corhuila.multi_tour.identity_audit.core.tenant.ReactivateTenant;
 import co.edu.corhuila.multi_tour.identity_audit.core.tenant.RegisterPendingTenant;
+import co.edu.corhuila.multi_tour.identity_audit.core.tenant.RemoveTenantImage;
+import co.edu.corhuila.multi_tour.identity_audit.core.tenant.SaveTenantImage;
 import co.edu.corhuila.multi_tour.identity_audit.core.tenant.SetTenantVisualIdentity;
+import co.edu.corhuila.multi_tour.identity_audit.core.tenant.TenantImages;
 import co.edu.corhuila.multi_tour.identity_audit.core.tenant.TenantRepository;
 import com.mongodb.ConnectionString;
 import com.mongodb.MongoClientSettings;
@@ -216,6 +220,21 @@ class CompositionRoot {
   @Bean
   SetTenantVisualIdentity setTenantVisualIdentity(TenantRepository tenants, Clock clock) {
     return new SetTenantVisualIdentity(tenants, clock);
+  }
+
+  @Bean
+  TenantImages tenantImages(MongoClient client, ConnectionString connection) {
+    return new MongoTenantImageRepository(client, connection.getDatabase());
+  }
+
+  @Bean
+  SaveTenantImage saveTenantImage(TenantRepository tenants, TenantImages images, Clock clock) {
+    return new SaveTenantImage(tenants, images, clock);
+  }
+
+  @Bean
+  RemoveTenantImage removeTenantImage(TenantRepository tenants, TenantImages images) {
+    return new RemoveTenantImage(tenants, images);
   }
 
   @Bean

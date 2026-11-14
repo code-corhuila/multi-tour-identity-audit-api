@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Identity Audit API
-  version: 0.21.0
+  version: 0.22.0
   description: |
     The contract this service is tested against (ADR-004 D7). It grows with each operation, written before the
     code; the design contract lives in `07-api/contracts/openapi/identity-audit.yaml` of `multi-tour-docs`.
@@ -381,6 +381,117 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/Error'
+  /api/v1/identity-audit/tenant/logo:
+    put:
+      summary: Save or replace the logo of the caller's tenant
+      description: Role `TENANT_ADMINISTRATOR`. Only PNG, JPEG and WebP, proved by the bytes, at most 256 KB; a body of up to 1.5 MB is read on this route. A refused file leaves the previous logo.
+      operationId: setTenantLogo
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TenantImageRequest'
+      responses:
+        '200':
+          description: Saved; the tenant is returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantResponse'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '413':
+          $ref: '#/components/responses/Error'
+        '415':
+          $ref: '#/components/responses/Error'
+        '422':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+    delete:
+      summary: Remove the logo of the caller's tenant
+      description: Role `TENANT_ADMINISTRATOR`. `204` also when there was none.
+      operationId: removeTenantLogo
+      security:
+        - bearerAuth: []
+      responses:
+        '204':
+          description: There is none now
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '422':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+  /api/v1/identity-audit/tenant/images/{position}:
+    parameters:
+      - name: position
+        in: path
+        required: true
+        schema: {type: string}
+    put:
+      summary: Save or replace a commercial image of the caller's tenant
+      description: Role `TENANT_ADMINISTRATOR`. Position 0 to 4, at most 1 MB; same rules as the logo.
+      operationId: setTenantImage
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TenantImageRequest'
+      responses:
+        '200':
+          description: Saved; the tenant is returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantResponse'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '413':
+          $ref: '#/components/responses/Error'
+        '415':
+          $ref: '#/components/responses/Error'
+        '422':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+    delete:
+      summary: Remove a commercial image of the caller's tenant
+      description: Role `TENANT_ADMINISTRATOR`. `204` also when there was none at that position.
+      operationId: removeTenantImage
+      security:
+        - bearerAuth: []
+      responses:
+        '204':
+          description: There is none now
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '422':
+          $ref: '#/components/responses/Error'
         '500':
           $ref: '#/components/responses/Error'
   /api/v1/identity-audit/tenant/localization:
@@ -1009,6 +1120,13 @@ components:
             limit: {type: integer, minimum: 1, maximum: 100}
             total: {type: integer, minimum: 0}
             totalPages: {type: integer, minimum: 0}
+    TenantImageRequest:
+      type: object
+      required: [contentType, data]
+      additionalProperties: false
+      properties:
+        contentType: {type: string, enum: [image/png, image/jpeg, image/webp]}
+        data: {type: string, format: byte}
     TenantPage:
       type: object
       required: [data, meta]
