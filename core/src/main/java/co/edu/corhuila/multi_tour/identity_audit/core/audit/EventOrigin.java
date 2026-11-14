@@ -11,6 +11,8 @@ final class EventOrigin {
 
   static final String SECURITY_SERVICE = "multi-tour-security";
   static final String RESERVATION_SERVICE = "multi-tour-commercial-reservation";
+  static final String CASH_SERVICE = "multi-tour-cash-reporting";
+  static final String OPERATIONS_SERVICE = "multi-tour-operations-cost";
 
   /** The service that wrote the event and the prefix of the record it is about. */
   record Origin(String service, String recordPrefix) {}
@@ -21,6 +23,11 @@ final class EventOrigin {
   private static final Origin CUSTOMER = new Origin(RESERVATION_SERVICE, "customers/");
   private static final Origin DISCOUNT_RULE = new Origin(RESERVATION_SERVICE, "discount-rules/");
   private static final Origin SUPPORT_ACCESS = new Origin(SECURITY_SERVICE, "support-accesses/");
+  private static final Origin CASH_SESSION = new Origin(CASH_SERVICE, "cash-sessions/");
+  private static final Origin CASH_MOVEMENT = new Origin(CASH_SERVICE, "cash-movements/");
+  private static final Origin REFUND = new Origin(CASH_SERVICE, "refunds/");
+  private static final Origin DEPARTURE = new Origin(OPERATIONS_SERVICE, "salidas/");
+  private static final Origin OPERATIONAL_COST = new Origin(OPERATIONS_SERVICE, "operational-costs/");
 
   private static final Map<String, Origin> BY_TYPE = Map.ofEntries(
       Map.entry("OptionalRoleEnabled", TENANT),
@@ -41,7 +48,25 @@ final class EventOrigin {
       Map.entry("DiscountRuleChanged", DISCOUNT_RULE),
       Map.entry("PlatformExceptionalAccessOpened", SUPPORT_ACCESS),
       Map.entry("PlatformExceptionalAccessClosed", SUPPORT_ACCESS),
-      Map.entry("PlatformExceptionalAccessUsed", SUPPORT_ACCESS));
+      Map.entry("PlatformExceptionalAccessUsed", SUPPORT_ACCESS),
+      Map.entry("CashSessionOpened", CASH_SESSION),
+      Map.entry("CashSessionClosed", CASH_SESSION),
+      Map.entry("CashSessionAutoCreated", CASH_SESSION),
+      Map.entry("CashSessionAutoClosed", CASH_SESSION),
+      Map.entry("CashSessionReopened", CASH_SESSION),
+      Map.entry("CashIncomeRecorded", CASH_MOVEMENT),
+      Map.entry("OperationalPaymentRecorded", CASH_MOVEMENT),
+      Map.entry("OperationalExpenseRecorded", CASH_MOVEMENT),
+      Map.entry("RefundExecuted", REFUND),
+      Map.entry("SalidaScheduled", DEPARTURE),
+      Map.entry("SalidaRescheduled", DEPARTURE),
+      Map.entry("SalidaVehiclesChanged", DEPARTURE),
+      Map.entry("SalidaExecutionStarted", DEPARTURE),
+      Map.entry("SalidaFinalized", DEPARTURE),
+      Map.entry("SalidaMarkedPendienteDeRegularizacion", DEPARTURE),
+      Map.entry("SalidaCancelled", DEPARTURE),
+      Map.entry("ExtraordinaryCancellationRecorded", DEPARTURE),
+      Map.entry("OperationalCostRecorded", OPERATIONAL_COST));
 
   private EventOrigin() {}
 
