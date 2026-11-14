@@ -40,6 +40,7 @@ import com.mongodb.client.MongoClients;
 import co.edu.corhuila.multi_tour.identity_audit.adapters.cash.HttpCashBoxes;
 import co.edu.corhuila.multi_tour.identity_audit.core.tenant.CashBoxes;
 import co.edu.corhuila.multi_tour.identity_audit.core.tenant.ChangeTenantLocalization;
+import co.edu.corhuila.multi_tour.identity_audit.core.tenant.ReadTenantLocalization;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Clock;
 import java.time.Duration;
@@ -155,6 +156,11 @@ class CompositionRoot {
   @Bean
   ChangeTenantLocalization changeTenantLocalization(TenantRepository tenants, CashBoxes cashBoxes, IdGenerator ids, Clock clock) {
     return new ChangeTenantLocalization(tenants, cashBoxes, ids, clock);
+  }
+
+  @Bean
+  ReadTenantLocalization readTenantLocalization(TenantRepository tenants) {
+    return new ReadTenantLocalization(tenants);
   }
 
   @Bean
