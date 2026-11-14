@@ -26,6 +26,7 @@ import co.edu.corhuila.multi_tour.identity_audit.core.session.SessionCutoffs;
 import co.edu.corhuila.multi_tour.identity_audit.core.tenant.CompleteOnboarding;
 import co.edu.corhuila.multi_tour.identity_audit.core.tenant.ConsultTenant;
 import co.edu.corhuila.multi_tour.identity_audit.core.tenant.FailOnboarding;
+import co.edu.corhuila.multi_tour.identity_audit.core.tenant.GetPublicImage;
 import co.edu.corhuila.multi_tour.identity_audit.core.tenant.GetPublicProfile;
 import co.edu.corhuila.multi_tour.identity_audit.core.tenant.IdGenerator;
 import co.edu.corhuila.multi_tour.identity_audit.core.tenant.InactivateTenant;
@@ -213,13 +214,18 @@ class CompositionRoot {
   }
 
   @Bean
-  GetPublicProfile getPublicProfile(TenantRepository tenants) {
-    return new GetPublicProfile(tenants);
+  GetPublicProfile getPublicProfile(TenantRepository tenants, TenantImages images) {
+    return new GetPublicProfile(tenants, images);
   }
 
   @Bean
   SetTenantVisualIdentity setTenantVisualIdentity(TenantRepository tenants, Clock clock) {
     return new SetTenantVisualIdentity(tenants, clock);
+  }
+
+  @Bean
+  GetPublicImage getPublicImage(TenantRepository tenants, TenantImages images) {
+    return new GetPublicImage(tenants, images);
   }
 
   @Bean
