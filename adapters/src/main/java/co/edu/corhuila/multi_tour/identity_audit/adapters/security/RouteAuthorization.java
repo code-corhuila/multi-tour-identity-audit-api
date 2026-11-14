@@ -11,7 +11,7 @@ import org.springframework.web.servlet.HandlerInterceptor;
 /**
  * Judges the role before the handler reads the request: {@code /internal/} routes answer only {@code SERVICE}
  * (ADR-004 D5), the visual identity and the audit access of a tenant only its Tenant Administrator (RN-IDA-API-22,
- * RN-IDA-API-43), the audit of one tenant every role of a tenant (RN-IDA-API-42), every other route
+ * RN-IDA-API-43), the audit of one tenant, by its path or as the tenant of the token, every role of a tenant (RN-IDA-API-42), every other route
  * with a token only the Platform Administrator (RN-IDA-API-01). The role is
  * chosen on the path as it is written, while the route that answers is chosen on the normalized one, so a path
  * written in a disguised way (see {@link RouteGuard#isDisguised}) is refused to everyone: no route needs one.
@@ -23,6 +23,8 @@ public final class RouteAuthorization implements HandlerInterceptor {
   private static final String AUDIT_ACCESS = "/api/v1/identity-audit/tenant/audit-access";
   /** The audit of one tenant: every role of a tenant gets to the use case, which judges the tenant first and the role after. */
   private static final Pattern TENANT_AUDIT = Pattern.compile("/api/v1/identity-audit/tenants/[^/]+/audit-records");
+  /** The same audit, of the tenant named by the token: the same roles reach the use case. */
+  private static final String OWN_AUDIT = "/api/v1/identity-audit/tenant/audit-records";
   private static final Set<Role> TENANT_USERS = Set.of(Role.TENANT_ADMINISTRATOR, Role.MANAGER, Role.ACCOUNTANT, Role.ANALYST,
       Role.OPERATIONAL_COLLABORATOR, Role.FINAL_CUSTOMER);
 
@@ -44,6 +46,6 @@ public final class RouteAuthorization implements HandlerInterceptor {
     if (uri.equals(VISUAL_IDENTITY) || uri.equals(AUDIT_ACCESS) || uri.startsWith(AUDIT_ACCESS + "/")) {
       return Set.of(Role.TENANT_ADMINISTRATOR);
     }
-    return TENANT_AUDIT.matcher(uri).matches() ? TENANT_USERS : Set.of(Role.PLATFORM_ADMINISTRATOR);
+    return TENANT_AUDIT.matcher(uri).matches() || uri.equals(OWN_AUDIT) ? TENANT_USERS : Set.of(Role.PLATFORM_ADMINISTRATOR);
   }
 }

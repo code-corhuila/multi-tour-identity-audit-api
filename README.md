@@ -1,13 +1,13 @@
 # multi-tour-identity-audit-api
 
-> The service of the identity-audit domain: the tenant lifecycle and, later, the audit records
+> The service of the identity-audit domain: the tenant lifecycle, the audit records and the cutoff of the sessions
 
 Part of the **Multi Tour** distributed system — team `multi-tour`, Grupo 2.
 Governance and documentation live in [`multi-tour-docs`](https://github.com/code-corhuila/multi-tour-docs).
 
 ## What it is
 
-A Java 21 / Spring Boot 3.5 service in three Maven modules: `core` (the domain and its ports, no framework), `adapters` (HTTP and MongoDB) and `app` (the composition root). It owns the tenants of the platform and the events they leave. Its database, `identity_audit`, is built by `multi-tour-identity-audit-db`; this repository holds no schema or migration.
+A Java 21 / Spring Boot 3.5 service in three Maven modules: `core` (the domain and its ports, no framework), `adapters` (HTTP and MongoDB) and `app` (the composition root). It owns the tenants of the platform and the events they leave, the audit records of the sensitive actions (written for every event the event relay delivers, with or without a tenant, and for each change it makes itself), the audit access that a tenant gives to its optional roles, and the cutoff of the sessions of each account. Its database, `identity_audit`, is built by `multi-tour-identity-audit-db`; this repository holds no schema or migration.
 
 ## How to start it
 
@@ -23,7 +23,7 @@ In the database `identity_audit` of the MongoDB instance of `multi-tour-infra-mo
 
 ## What is missing
 
-The audit of sensitive actions and the other stories of the domain: see `07-api/specs/identity-audit/` in `multi-tour-docs`.
+The other stories of the domain: see `07-api/specs/identity-audit/` in `multi-tour-docs`. The audit records the events of the security microservice; those of the services of other owners (`commercial-reservation`, `cash-reporting`) arrive only when those services publish them.
 
 ## Branching
 
@@ -46,4 +46,4 @@ Full policy: `00-governance/branching-policy.md` in `multi-tour-docs`.
 
 ## Coverage
 
-`mvn -B verify` measures the lines covered by the tests of each module (JaCoCo) and fails under its floor: `core` 0.97, `adapters` 0.36 (its HTTP part is covered by the tests of `app`, which the report of `adapters` does not add up) and `app` 0.93. The floors are measured with the database of the CI (`TEST_DATABASE_URL`); to run `mvn verify` without one, add `-Dcoverage.halt=false`. A lower floor needs a reason in the pull request.
+`mvn -B verify` measures the lines covered by the tests of each module (JaCoCo) and fails under its floor, the property `coverage.floor` of the `pom.xml` of each module (`grep -n coverage.floor */pom.xml` prints them). The floor of `adapters` is lower on purpose: its HTTP part is covered by the tests of `app`, which the report of `adapters` does not add up. The floors are measured with the database of the CI (`TEST_DATABASE_URL`); to run `mvn verify` without one, add `-Dcoverage.halt=false`. A lower floor needs a reason in the pull request.

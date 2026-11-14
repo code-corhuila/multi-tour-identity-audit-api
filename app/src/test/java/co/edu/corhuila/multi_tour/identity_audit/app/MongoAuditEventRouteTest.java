@@ -98,6 +98,33 @@ class MongoAuditEventRouteTest extends ShellTest {
   }
 
   @Test
+  void C_a_reservation_event_is_recorded_under_reservations_with_its_service_as_the_actor_and_a_person_when_the_event_names_one() {
+    String created = newId();
+    Map<String, Object> reservation = granted(created);
+    reservation.put("eventType", "ReservationCreated");
+    reservation.remove("actorId");
+    reservation.remove("reason");
+    reservation.put("payload", Map.of("customerId", ACCOUNT, "finalValueCents", 120000));
+    assertThat(deliver(created, reservation).statusCode()).isEqualTo(201);
+
+    Document kept = record(created);
+    assertThat(kept.getString("action")).isEqualTo("RESERVATION_CREATED");
+    assertThat(kept.getString("actorId")).isEqualTo("multi-tour-commercial-reservation");
+    assertThat(kept.getString("affectedRecordId")).isEqualTo("reservations/" + ACCOUNT);
+
+    String accessed = newId();
+    Map<String, Object> sensitive = granted(accessed);
+    sensitive.put("eventType", "SensitiveDataAccessed");
+    sensitive.remove("actorId");
+    sensitive.put("payload", Map.of("customerId", ACCOUNT, "actorId", ADMIN));
+    assertThat(deliver(accessed, sensitive).statusCode()).isEqualTo(201);
+
+    Document access = record(accessed);
+    assertThat(access.getString("actorId")).isEqualTo(ADMIN);
+    assertThat(access.getString("affectedRecordId")).isEqualTo("customers/" + ACCOUNT);
+  }
+
+  @Test
   void C_an_event_with_the_extended_fields_keeps_them_and_one_without_an_actor_is_the_security_service() {
     String withFields = newId();
     Map<String, Object> body = granted(withFields);

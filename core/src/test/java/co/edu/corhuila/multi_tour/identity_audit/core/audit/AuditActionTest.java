@@ -21,7 +21,11 @@ class AuditActionTest {
   void D_every_event_that_exists_today_makes_a_known_action() {
     List<String> events = List.of("AccountSessionsRevoked", "AccountBlocked", "SpecialPermissionGranted", "SpecialPermissionRevoked",
         "OptionalRoleEnabled", "OptionalRoleDisabled", "TenantCreated", "TenantInactivated", "TenantReactivated",
-        "AuditAccessEnabled", "AuditAccessDisabled");
+        "AuditAccessEnabled", "AuditAccessDisabled",
+        // the events of other services that the audit records (spec 008)
+        "AccountEmailVerified", "ReservationCreated", "ReservationModified", "CapacityAllocated", "CapacityReleased",
+        "PaymentEvidenceRegistered", "PaymentValidated", "PaymentRejected", "ReservationConfirmed", "ReservationCancelled",
+        "RefundAuthorized", "ClientNotified", "CustomerRegistered", "DiscountRuleChanged", "SensitiveDataAccessed");
 
     assertThat(events).allSatisfy(event -> assertThat(AuditAction.isKnown(AuditAction.of(event))).as(event).isTrue());
     assertThat(AuditAction.KNOWN).as("no action without an event").hasSize(events.size());
