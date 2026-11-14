@@ -353,6 +353,27 @@ paths:
         '500':
           $ref: '#/components/responses/Error'
   /api/v1/identity-audit/tenant/localization:
+    get:
+      summary: Read the time zone and the country of the caller's tenant
+      description: Gives the Tenant Administrator the tenant named by the token's `tenantId` claim with its current time zone and country (HU-IDA-004, rule RN-IDA-API-107); the tenant never comes from the path or the query. An inactive tenant is read all the same (`200`). Role `TENANT_ADMINISTRATOR`; the Platform Administrator, a `SERVICE`, any other role and the token of an exceptional or emergency access are `403`.
+      operationId: getTenantLocalization
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: The tenant with its current zone and country
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantResponse'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
     put:
       summary: Change the time zone and the country of the caller's tenant
       description: Changes the official time zone, the country, or both, of the tenant named by the token's `tenantId` claim, from now on only (HU-IDA-004); the path and the body name no tenant. The same values answer `200` and change nothing, and no `Idempotency-Key` is asked because nothing is created. At least one field is sent; a field that is not declared, a zone that is not an existing IANA name or a country that is not a supported ISO 3166-1 code is `400` naming the field. A change of zone is `422 BUSINESS_RULE_VIOLATION` while any cash box of the tenant is open or pending closing, and an inactive tenant is `422` too; a change of country alone is not blocked by cash. If the cash boxes cannot be read the answer is `503` and nothing changes. Role `TENANT_ADMINISTRATOR`; the Platform Administrator, a `SERVICE`, any other role and the token of an exceptional or emergency access are `403`.
