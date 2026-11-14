@@ -45,6 +45,7 @@ final class EventOrigin {
       Map.entry("ClientNotified", RESERVATION),
       Map.entry("CustomerRegistered", CUSTOMER),
       Map.entry("SensitiveDataAccessed", CUSTOMER),
+      Map.entry("SensitiveDataDeleted", RESERVATION),
       Map.entry("DiscountRuleChanged", DISCOUNT_RULE),
       Map.entry("PlatformExceptionalAccessOpened", SUPPORT_ACCESS),
       Map.entry("PlatformExceptionalAccessClosed", SUPPORT_ACCESS),
