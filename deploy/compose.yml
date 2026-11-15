@@ -16,6 +16,10 @@ services:
       JWT_AUDIENCE: ${JWT_AUDIENCE:-}
       # the address of the database with the user identity_audit_app (never the administrator); empty stops the service at start
       MONGODB_URI: ${MONGODB_URI:-}
+      # the cash boxes of a tenant are read from cash-reporting, with the service token of this service, before a change of time zone (HU-IDA-004);
+      # without either one the change of zone answers 503 and nothing changes, and a change of country alone still works
+      CASH_REPORTING_BASE_URL: ${CASH_REPORTING_BASE_URL:-}
+      SERVICE_TOKEN: ${SERVICE_TOKEN:-}
     expose: ["8082"]
     read_only: true
     tmpfs: [/tmp]

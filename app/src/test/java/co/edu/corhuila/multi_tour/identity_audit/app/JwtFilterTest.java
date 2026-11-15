@@ -20,7 +20,7 @@ import org.springframework.context.ConfigurableApplicationContext;
 class JwtFilterTest extends ShellTest {
 
   /** A protected route that is not built, so passing the filter shows as the 404 of an unknown route. */
-  private static final String PROTECTED = "/api/v1/identity-audit/tenants/not-built/audit-records";
+  private static final String PROTECTED = "/api/v1/identity-audit/not-built";
 
   private Response call(String authorization) {
     var request = given();
@@ -44,6 +44,36 @@ class JwtFilterTest extends ShellTest {
     assertRefused("Basic dXNlcjpwYXNz");
     assertRefused("Bearer ");
     assertRefused("Bearer abc.def.ghi");
+  }
+
+  private static final String AUTHORIZATION_ID = "3f2b8c1e-1111-4222-8333-444455556666";
+  private static final String TENANT = "00000000-0000-4000-8000-0000000000aa";
+
+  private static JWTClaimsSet.Builder access(String mark, List<String> scope) {
+    return Tokens.claims("platform-admin-1", 600, List.of("PLATFORM_ADMINISTRATOR"), TENANT)
+        .claim("access", mark).claim("scope", scope).claim("authorizationId", AUTHORIZATION_ID);
+  }
+
+  // Spec 012 RN-SEC-012-09: the audit has no area for the token of an access, so every route it serves answers 403 to it.
+  @Test
+  void C_the_audit_api_forbids_the_exceptional_token() {
+    for (String mark : List.of("exceptional", "emergency")) {
+      String bearer = "Bearer " + Tokens.valid(access(mark, List.of("OPERATIONS", "CATALOG", "SENSITIVE")));
+      for (String route : List.of("/api/v1/identity-audit/tenant/audit-records", "/api/v1/identity-audit/tenants/" + TENANT + "/audit-records",
+          "/api/v1/identity-audit/internal/outbox")) {
+        assertThat(given().header("Authorization", bearer).get(route).statusCode()).as(mark + " " + route).isEqualTo(403);
+      }
+    }
+  }
+
+  @Test
+  void A_a_malformed_access_claim_is_still_a_401() {
+    assertRefused("Bearer " + Tokens.valid(access("exceptional", List.of("OPERATIONS")).claim("authorizationId", null)));
+    assertRefused("Bearer " + Tokens.valid(access("exceptional", List.of("OPERATIONS", "EVERYTHING"))));
+    assertRefused("Bearer " + Tokens.valid(access("exceptional", List.of())));
+    assertRefused("Bearer " + Tokens.valid(access("Exceptional", List.of("OPERATIONS"))));
+    assertRefused("Bearer " + Tokens.valid(Tokens.claims("account-1", 600, List.of("TENANT_ADMINISTRATOR"), TENANT)
+        .claim("access", "exceptional").claim("scope", List.of("OPERATIONS")).claim("authorizationId", AUTHORIZATION_ID)));
   }
 
   @Test

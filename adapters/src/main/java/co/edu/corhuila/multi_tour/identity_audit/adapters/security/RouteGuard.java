@@ -13,8 +13,9 @@ import java.util.regex.Pattern;
  */
 final class RouteGuard {
 
+  /** The profile of a tenant and its two kinds of file: what anyone with the link reads (specs 003 and 012). */
   private static final Pattern PUBLIC_PROFILE =
-      Pattern.compile("/api/v1/identity-audit/public/tenants/[a-z0-9-]{1,40}");
+      Pattern.compile("/api/v1/identity-audit/public/tenants/[a-z0-9-]{1,40}(/logo|/images/[a-z0-9-]{1,9})?");
 
   private RouteGuard() {}
 

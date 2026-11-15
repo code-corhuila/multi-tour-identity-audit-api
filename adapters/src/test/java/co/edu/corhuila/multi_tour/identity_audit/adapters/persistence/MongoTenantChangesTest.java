@@ -46,7 +46,7 @@ class MongoTenantChangesTest {
   void aCleanDatabase() {
     url = new ConnectionString(System.getenv("TEST_DATABASE_URL"));
     client = MongoClients.create(url);
-    for (String collection : List.of("tenants", "outbox_events", "idempotency_keys")) {
+    for (String collection : List.of("tenants", "outbox_events", "idempotency_keys", "audit_records")) {
       client.getDatabase(url.getDatabase()).getCollection(collection).deleteMany(new Document());
     }
     tenants = new MongoTenantRepository(client, url.getDatabase());
@@ -98,6 +98,112 @@ class MongoTenantChangesTest {
     assertThat(event.get("payload", Document.class).getString("identifier")).isEqualTo("acme-tours");
   }
 
+  private Tenant activeTenant(int n, String identifier) {
+    Tenant pending = stored(n, identifier);
+    Tenant active = pending.completeOnboarding(MEMBERSHIP, TenantStatus.ACTIVE, LATER);
+    tenants.update(pending, active, List.of(event(n, TenantEventType.TENANT_CREATED, active, LATER)));
+    return active;
+  }
+
+  // Spec 010 RN-IDA-API-105: the new zone and country, the event that tells the others and the record of the audit are one write.
+  @Test
+  void I_the_change_and_its_event_are_written_together() {
+    Tenant active = activeTenant(1, "acme-tours");
+    Tenant moved = active.withLocalization("America/Mexico_City", "MX", LATER.plusSeconds(5));
+    TenantEvent changed = new TenantEvent("00000000-0000-4000-8000-0000000e0099", TenantEventType.TENANT_LOCALIZATION_CHANGED, moved,
+        "00000000-0000-4000-8000-0000000000cc", "corr-loc", moved.updatedAt(), active);
+
+    tenants.update(active, moved, List.of(changed));
+
+    assertThat(tenants.findById(active.tenantId())).contains(moved);
+    Document event = client.getDatabase(url.getDatabase()).getCollection("outbox_events").find(new Document("eventType", "TenantLocalizationChanged")).first();
+    assertThat(event.getString("aggregateId")).isEqualTo(active.tenantId());
+    assertThat(event.getString("actorId")).isEqualTo("00000000-0000-4000-8000-0000000000cc");
+    Document payload = event.get("payload", Document.class);
+    assertThat(payload.getString("previousTimeZone")).isEqualTo("America/Bogota");
+    assertThat(payload.getString("previousCountry")).isEqualTo("CO");
+    assertThat(payload.getString("timeZone")).isEqualTo("America/Mexico_City");
+    assertThat(payload.getString("country")).isEqualTo("MX");
+    assertThat(payload.getString("changedBy")).isEqualTo("00000000-0000-4000-8000-0000000000cc");
+    assertThat(payload.getString("effectiveAt")).isEqualTo(moved.updatedAt().toString());
+    assertThat(payload.getString("tenantId")).isEqualTo(active.tenantId());
+    Document audit = client.getDatabase(url.getDatabase()).getCollection("audit_records").find(new Document("action", "TENANT_LOCALIZATION_CHANGED")).first();
+    assertThat(audit.getString("affectedRecordId")).isEqualTo("tenants/" + active.tenantId());
+    assertThat(audit.get("previousValue", Document.class).getString("timeZone")).isEqualTo("America/Bogota");
+    assertThat(audit.get("newValue", Document.class).getString("country")).isEqualTo("MX");
+  }
+
+  // Spec 010 RN-IDA-API-107: two changes decided on the same state, even in the same millisecond, leave one state and one event.
+  @Test
+  void I_a_lost_race_leaves_one_state_and_one_event() {
+    Tenant active = activeTenant(1, "acme-tours");
+    Instant same = LATER; // the very instant of the state the two changes were decided on
+    Tenant toMexico = active.withLocalization("America/Mexico_City", "MX", same);
+    Tenant toPeru = active.withLocalization("America/Lima", "PE", same);
+    tenants.update(active, toMexico, List.of(new TenantEvent("00000000-0000-4000-8000-0000000e0098", TenantEventType.TENANT_LOCALIZATION_CHANGED,
+        toMexico, "00000000-0000-4000-8000-0000000000cc", "corr-a", same, active)));
+
+    assertThatThrownBy(() -> tenants.update(active, toPeru, List.of(new TenantEvent("00000000-0000-4000-8000-0000000e0097",
+        TenantEventType.TENANT_LOCALIZATION_CHANGED, toPeru, "00000000-0000-4000-8000-0000000000cc", "corr-b", same, active))))
+        .isInstanceOf(ConcurrentChangeException.class);
+
+    assertThat(tenants.findById(active.tenantId())).contains(toMexico);
+    assertThat(client.getDatabase(url.getDatabase()).getCollection("outbox_events").countDocuments(new Document("eventType", "TenantLocalizationChanged"))).isEqualTo(1);
+  }
+
+  @Test
+  void I_a_tenant_change_and_its_audit_record_are_written_together() {
+    Tenant pending = stored(1, "acme-tours");
+    Tenant active = pending.completeOnboarding(MEMBERSHIP, TenantStatus.ACTIVE, LATER);
+    tenants.update(pending, active, List.of(event(1, TenantEventType.TENANT_CREATED, active, LATER)));
+    Tenant inactive = active.inactivate("platform-admin", "unpaid", LATER.plusSeconds(1));
+    tenants.update(active, inactive, List.of(event(2, TenantEventType.TENANT_INACTIVATED, inactive, inactive.updatedAt())));
+    Tenant again = inactive.reactivate("platform-admin", "paid", LATER.plusSeconds(2));
+    tenants.update(inactive, again, List.of(event(3, TenantEventType.TENANT_REACTIVATED, again, again.updatedAt())));
+
+    assertThat(count("audit_records")).as("one record per event").isEqualTo(3);
+    var audits = client.getDatabase(url.getDatabase()).getCollection("audit_records");
+    Document off = audits.find(new Document("action", "TENANT_INACTIVATED")).first();
+    assertThat(off.getString("tenantId")).isEqualTo(pending.tenantId());
+    assertThat(off.getString("actorId")).isEqualTo("onboard-tenant");
+    assertThat(off.getString("affectedRecordId")).isEqualTo("tenants/" + pending.tenantId());
+    assertThat(off.getString("reason")).isEqualTo("unpaid");
+    assertThat(off.get("previousValue", Document.class).getString("tenantStatus")).isEqualTo("ACTIVE");
+    assertThat(off.get("newValue", Document.class).getString("tenantStatus")).isEqualTo("INACTIVE");
+    assertThat(off.getString("eventId")).isEqualTo("00000000-0000-4000-8000-0000000e0002");
+    Document created = audits.find(new Document("action", "TENANT_CREATED")).first();
+    assertThat(created.get("previousValue", Document.class).getString("tenantStatus")).isEqualTo("PENDING");
+    assertThat(created.getString("_id")).as("its own id, not the id of the event").isNotEqualTo(created.getString("eventId"));
+    Document on = audits.find(new Document("action", "TENANT_REACTIVATED")).first();
+    assertThat(on.getString("reason")).isEqualTo("paid");
+    assertThat(on.getString("actorId")).isEqualTo("onboard-tenant");
+    assertThat(on.get("previousValue", Document.class).getString("tenantStatus")).isEqualTo("INACTIVE");
+  }
+
+  @Test
+  void I_a_record_that_cannot_be_kept_leaves_neither_the_tenant_change_nor_the_event() {
+    Tenant pending = stored(1, "acme-tours");
+    Tenant done = pending.completeOnboarding(MEMBERSHIP, TenantStatus.ACTIVE, LATER);
+    TenantEvent created = event(1, TenantEventType.TENANT_CREATED, done, LATER);
+    // a record of that very event is already there, so the unique index of the event id refuses the new one
+    client.getDatabase(url.getDatabase()).getCollection("audit_records").insertOne(MongoAuditRecordRepository.toDocument(
+        created.toAuditRecord("00000000-0000-4000-8000-000000000999", pending)));
+
+    assertThatThrownBy(() -> tenants.update(pending, done, List.of(created))).isInstanceOf(com.mongodb.MongoException.class);
+
+    assertThat(tenants.findById(pending.tenantId())).as("the tenant did not change").contains(pending);
+    assertThat(count("outbox_events")).as("and no event was left").isZero();
+    assertThat(count("audit_records")).as("only the one that was there").isEqualTo(1);
+  }
+
+  @Test
+  void I_a_failed_onboarding_without_an_event_leaves_no_audit_record() {
+    Tenant other = stored(2, "other-one");
+    tenants.update(other, other.failOnboarding(FailedStep.CREATE_ACCOUNT, LATER), List.of());
+
+    assertThat(count("audit_records")).isZero();
+  }
+
   @Test
   void I_every_status_with_its_fields_goes_through_the_validator_and_comes_back_equal() {
     Tenant pending = stored(1, "acme-tours");
@@ -126,6 +232,7 @@ class MongoTenantChangesTest {
         .isInstanceOf(ConcurrentChangeException.class);
     assertThat(tenants.findById(pending.tenantId())).contains(done);
     assertThat(count("outbox_events")).isEqualTo(1);
+    assertThat(count("audit_records")).as("the refused change leaves no record either").isEqualTo(1);
   }
 
   @Test

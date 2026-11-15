@@ -30,6 +30,7 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 import org.bson.Document;
 import org.bson.conversions.Bson;
 
@@ -59,6 +60,10 @@ public final class MongoTenantRepository implements TenantRepository {
 
   private MongoCollection<Document> keys() {
     return client.getDatabase(database).getCollection("idempotency_keys");
+  }
+
+  private MongoCollection<Document> audits() {
+    return client.getDatabase(database).getCollection("audit_records");
   }
 
   private MongoCollection<Document> outbox() {
@@ -103,6 +108,11 @@ public final class MongoTenantRepository implements TenantRepository {
     }
   }
 
+  /** The record id is only technical, so it is made here; what the record says is decided by the event. */
+  private static Document auditOf(TenantEvent event, Tenant previous) {
+    return MongoAuditRecordRepository.toDocument(event.toAuditRecord(UUID.randomUUID().toString(), previous));
+  }
+
   /** A duplicate key on that index, and not on another one such as the _id. */
   private static boolean duplicate(MongoWriteException e, String index) {
     return e.getError().getCategory() == ErrorCategory.DUPLICATE_KEY && e.getError().getMessage().contains(index);
@@ -132,6 +142,8 @@ public final class MongoTenantRepository implements TenantRepository {
         }
         if (!events.isEmpty()) {
           outbox().insertMany(session, events.stream().map(TenantDocuments::toEventDocument).toList());
+          // the evidence of the change goes with it: the tenant, the event and the record are kept together or not at all
+          audits().insertMany(session, events.stream().map(event -> auditOf(event, expected)).toList());
         }
         return null;
       }, DURABLE);

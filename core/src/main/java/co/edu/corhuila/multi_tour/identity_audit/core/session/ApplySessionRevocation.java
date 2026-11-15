@@ -1,0 +1,95 @@
+package co.edu.corhuila.multi_tour.identity_audit.core.session;
+
+import co.edu.corhuila.multi_tour.identity_audit.core.audit.AuditRecord;
+import co.edu.corhuila.multi_tour.identity_audit.core.audit.PlatformEvent;
+import co.edu.corhuila.multi_tour.identity_audit.core.tenant.ConcurrentChangeException;
+import co.edu.corhuila.multi_tour.identity_audit.core.tenant.IdGenerator;
+import co.edu.corhuila.multi_tour.identity_audit.core.tenant.InvalidDataException;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.format.DateTimeParseException;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.regex.Pattern;
+
+/** An event {@code AccountSessionsRevoked}: the account keeps a cutoff and a token issued before it is refused (ADR-004 D5). */
+public final class ApplySessionRevocation {
+
+  public static final String EVENT_TYPE = "AccountSessionsRevoked";
+  private static final Pattern UUID_FORMAT =
+      Pattern.compile("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}");
+
+  /** {@code APPLIED} when the cutoff was set or moved; {@code UNCHANGED} for a repeat of the event id or an event older than the cutoff. */
+  public enum Outcome { APPLIED, UNCHANGED }
+
+  /** {@code tenantId} is {@code null} for an account of the Platform Administrator, which belongs to no tenant (ADR-004 D4). */
+  public record Command(String eventId, String eventType, String tenantId, String aggregateId, String accountId, String revokedFrom) {
+
+    public Command {
+      if (!EVENT_TYPE.equals(eventType)) {
+        throw new InvalidDataException("eventType", "must be " + EVENT_TYPE);
+      }
+      require("eventId", eventId);
+      if (tenantId != null) {
+        require("tenantId", tenantId);
+      }
+      require("accountId", accountId);
+      if (!accountId.equals(aggregateId)) {
+        throw new InvalidDataException("aggregateId", "must be the account of the payload");
+      }
+      if (revokedFrom == null) {
+        throw new InvalidDataException("revokedFrom", "is required");
+      }
+    }
+
+    Instant revokedFromInstant() {
+      try {
+        return Instant.parse(revokedFrom);
+      } catch (DateTimeParseException notADate) {
+        throw new InvalidDataException("revokedFrom", "must be an RFC 3339 date and time");
+      }
+    }
+
+    private static void require(String field, String value) {
+      if (value == null || !UUID_FORMAT.matcher(value).matches()) {
+        throw new InvalidDataException(field, "must be a lowercase UUID");
+      }
+    }
+  }
+
+  private final SessionCutoffs cutoffs;
+  private final Clock clock;
+  private final IdGenerator ids;
+
+  public ApplySessionRevocation(SessionCutoffs cutoffs, Clock clock, IdGenerator ids) {
+    this.cutoffs = cutoffs;
+    this.clock = clock;
+    this.ids = ids;
+  }
+
+  /** A race decides again once, as the other changes of the service do. */
+  public Outcome execute(Command command, PlatformEvent event) {
+    Instant from = command.revokedFromInstant();
+    // built once, before any write, so a race that decides again keeps the same record id and an event that cannot make one writes nothing
+    AuditRecord audit = event.toAuditRecord(ids.newId());
+    try {
+      return attempt(command, from, audit);
+    } catch (ConcurrentChangeException raced) {
+      return attempt(command, from, audit);
+    }
+  }
+
+  private Outcome attempt(Command command, Instant from, AuditRecord audit) {
+    Instant now = clock.instant();
+    Optional<SessionCutoff> current = cutoffs.find(command.accountId());
+    // an account belongs to one tenant or to none (ADR-004 D5): the event may not move it from one to the other, in either direction
+    if (current.isPresent() && !Objects.equals(current.get().tenantId(), command.tenantId())) {
+      throw new InvalidDataException("tenantId", "is not the tenant of the account");
+    }
+    SessionCutoff next = current
+        .map(kept -> kept.moveTo(from, now))
+        .orElseGet(() -> new SessionCutoff(command.accountId(), command.tenantId(), from, now));
+    boolean first = cutoffs.record(command.eventId(), current.orElse(null), next, now, audit);
+    return first && !next.equals(current.orElse(null)) ? Outcome.APPLIED : Outcome.UNCHANGED;
+  }
+}

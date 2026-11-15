@@ -2,6 +2,10 @@ package co.edu.corhuila.multi_tour.identity_audit.app;
 
 import co.edu.corhuila.multi_tour.identity_audit.adapters.persistence.MongoDatabaseHealth;
 import co.edu.corhuila.multi_tour.identity_audit.adapters.persistence.MongoOutboxRepository;
+import co.edu.corhuila.multi_tour.identity_audit.adapters.persistence.MongoAuditAccessRepository;
+import co.edu.corhuila.multi_tour.identity_audit.adapters.persistence.MongoAuditRecordRepository;
+import co.edu.corhuila.multi_tour.identity_audit.adapters.persistence.MongoSessionCutoffRepository;
+import co.edu.corhuila.multi_tour.identity_audit.adapters.persistence.MongoTenantImageRepository;
 import co.edu.corhuila.multi_tour.identity_audit.adapters.persistence.MongoTenantRepository;
 import co.edu.corhuila.multi_tour.identity_audit.core.health.DatabaseHealth;
 import co.edu.corhuila.multi_tour.identity_audit.core.outbox.ListDueEvents;
@@ -9,21 +13,40 @@ import co.edu.corhuila.multi_tour.identity_audit.core.outbox.MarkEventPublished;
 import co.edu.corhuila.multi_tour.identity_audit.core.outbox.OutboxRepository;
 import co.edu.corhuila.multi_tour.identity_audit.core.outbox.RecordFailedAttempt;
 import co.edu.corhuila.multi_tour.identity_audit.core.outbox.RetryPolicy;
+import co.edu.corhuila.multi_tour.identity_audit.core.audit.AuditAccessSettings;
+import co.edu.corhuila.multi_tour.identity_audit.core.audit.AuditReader;
+import co.edu.corhuila.multi_tour.identity_audit.core.audit.AuditRecords;
+import co.edu.corhuila.multi_tour.identity_audit.core.audit.ChangeAuditAccess;
+import co.edu.corhuila.multi_tour.identity_audit.core.audit.ConsultAuditAccess;
+import co.edu.corhuila.multi_tour.identity_audit.core.audit.ListPlatformAudit;
+import co.edu.corhuila.multi_tour.identity_audit.core.audit.ListTenantAudit;
+import co.edu.corhuila.multi_tour.identity_audit.core.audit.RecordPlatformEvent;
+import co.edu.corhuila.multi_tour.identity_audit.core.session.ApplySessionRevocation;
+import co.edu.corhuila.multi_tour.identity_audit.core.session.SessionCutoffs;
 import co.edu.corhuila.multi_tour.identity_audit.core.tenant.CompleteOnboarding;
 import co.edu.corhuila.multi_tour.identity_audit.core.tenant.ConsultTenant;
 import co.edu.corhuila.multi_tour.identity_audit.core.tenant.FailOnboarding;
+import co.edu.corhuila.multi_tour.identity_audit.core.tenant.GetPublicImage;
 import co.edu.corhuila.multi_tour.identity_audit.core.tenant.GetPublicProfile;
 import co.edu.corhuila.multi_tour.identity_audit.core.tenant.IdGenerator;
 import co.edu.corhuila.multi_tour.identity_audit.core.tenant.InactivateTenant;
 import co.edu.corhuila.multi_tour.identity_audit.core.tenant.ListTenants;
 import co.edu.corhuila.multi_tour.identity_audit.core.tenant.ReactivateTenant;
 import co.edu.corhuila.multi_tour.identity_audit.core.tenant.RegisterPendingTenant;
+import co.edu.corhuila.multi_tour.identity_audit.core.tenant.RemoveTenantImage;
+import co.edu.corhuila.multi_tour.identity_audit.core.tenant.SaveTenantImage;
 import co.edu.corhuila.multi_tour.identity_audit.core.tenant.SetTenantVisualIdentity;
+import co.edu.corhuila.multi_tour.identity_audit.core.tenant.TenantImages;
 import co.edu.corhuila.multi_tour.identity_audit.core.tenant.TenantRepository;
 import com.mongodb.ConnectionString;
 import com.mongodb.MongoClientSettings;
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoClients;
+import co.edu.corhuila.multi_tour.identity_audit.adapters.cash.HttpCashBoxes;
+import co.edu.corhuila.multi_tour.identity_audit.core.tenant.CashBoxes;
+import co.edu.corhuila.multi_tour.identity_audit.core.tenant.ChangeTenantLocalization;
+import co.edu.corhuila.multi_tour.identity_audit.core.tenant.ReadTenantLocalization;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Clock;
 import java.time.Duration;
 import java.util.UUID;
@@ -82,6 +105,70 @@ class CompositionRoot {
   }
 
   @Bean
+  SessionCutoffs sessionCutoffs(MongoClient client, ConnectionString connection) {
+    return new MongoSessionCutoffRepository(client, connection.getDatabase());
+  }
+
+  @Bean
+  ApplySessionRevocation applySessionRevocation(SessionCutoffs cutoffs, Clock clock, IdGenerator ids) {
+    return new ApplySessionRevocation(cutoffs, clock, ids);
+  }
+
+  /** One adapter for the two ports, the one that writes the audit and the one that reads it, so each is injected from this bean. */
+  @Bean
+  MongoAuditRecordRepository auditRecordRepository(MongoClient client, ConnectionString connection) {
+    return new MongoAuditRecordRepository(client, connection.getDatabase());
+  }
+
+  @Bean
+  ListPlatformAudit listPlatformAudit(AuditReader reader) {
+    return new ListPlatformAudit(reader);
+  }
+
+  @Bean
+  ListTenantAudit listTenantAudit(AuditReader reader, AuditAccessSettings settings) {
+    return new ListTenantAudit(reader, settings);
+  }
+
+  @Bean
+  RecordPlatformEvent recordPlatformEvent(AuditRecords records, IdGenerator ids) {
+    return new RecordPlatformEvent(records, ids);
+  }
+
+  @Bean
+  AuditAccessSettings auditAccessSettings(MongoClient client, ConnectionString connection) {
+    return new MongoAuditAccessRepository(client, connection.getDatabase());
+  }
+
+  @Bean
+  ConsultAuditAccess consultAuditAccess(AuditAccessSettings settings) {
+    return new ConsultAuditAccess(settings);
+  }
+
+  @Bean
+  ChangeAuditAccess changeAuditAccess(AuditAccessSettings settings, Clock clock, IdGenerator ids) {
+    return new ChangeAuditAccess(settings, clock, ids);
+  }
+
+  /** The cash boxes of another service (spec 010): without its address or the token of this service the answer is always "unavailable". */
+  @Bean
+  CashBoxes cashBoxes(
+      ObjectMapper json, @Value("${CASH_REPORTING_BASE_URL:}") String baseUrl, @Value("${SERVICE_TOKEN:}") String token,
+      @Value("${cash.read.timeout:PT5S}") Duration timeout) {
+    return new HttpCashBoxes(baseUrl, token, json, timeout);
+  }
+
+  @Bean
+  ChangeTenantLocalization changeTenantLocalization(TenantRepository tenants, CashBoxes cashBoxes, IdGenerator ids, Clock clock) {
+    return new ChangeTenantLocalization(tenants, cashBoxes, ids, clock);
+  }
+
+  @Bean
+  ReadTenantLocalization readTenantLocalization(TenantRepository tenants) {
+    return new ReadTenantLocalization(tenants);
+  }
+
+  @Bean
   Clock clock() {
     return Clock.systemUTC();
   }
@@ -127,13 +214,33 @@ class CompositionRoot {
   }
 
   @Bean
-  GetPublicProfile getPublicProfile(TenantRepository tenants) {
-    return new GetPublicProfile(tenants);
+  GetPublicProfile getPublicProfile(TenantRepository tenants, TenantImages images) {
+    return new GetPublicProfile(tenants, images);
   }
 
   @Bean
   SetTenantVisualIdentity setTenantVisualIdentity(TenantRepository tenants, Clock clock) {
     return new SetTenantVisualIdentity(tenants, clock);
+  }
+
+  @Bean
+  GetPublicImage getPublicImage(TenantRepository tenants, TenantImages images) {
+    return new GetPublicImage(tenants, images);
+  }
+
+  @Bean
+  TenantImages tenantImages(MongoClient client, ConnectionString connection) {
+    return new MongoTenantImageRepository(client, connection.getDatabase());
+  }
+
+  @Bean
+  SaveTenantImage saveTenantImage(TenantRepository tenants, TenantImages images, Clock clock) {
+    return new SaveTenantImage(tenants, images, clock);
+  }
+
+  @Bean
+  RemoveTenantImage removeTenantImage(TenantRepository tenants, TenantImages images) {
+    return new RemoveTenantImage(tenants, images);
   }
 
   @Bean

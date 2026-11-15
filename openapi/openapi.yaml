@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Identity Audit API
-  version: 0.12.0
+  version: 0.25.0
   description: |
     The contract this service is tested against (ADR-004 D7). It grows with each operation, written before the
     code; the design contract lives in `07-api/contracts/openapi/identity-audit.yaml` of `multi-tour-docs`.
@@ -36,6 +36,37 @@ paths:
                         enum: [ok, down]
                         description: Whether the database answered a ping within 2 s; a database that is down does not make the answer a 503
   /api/v1/identity-audit/internal/tenants:
+    get:
+      summary: List the tenants with their status, for the services
+      description: Only `tenantId` and `status` of each tenant. `status` is `ACTIVE`, `INACTIVE` or `ALL` (default, every status). Paged, newest first. Role `SERVICE`; a person is `403`.
+      operationId: listTenantsForServices
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema: {type: integer, minimum: 1, default: 1}
+        - name: limit
+          in: query
+          schema: {type: integer, minimum: 1, maximum: 100, default: 20}
+        - name: status
+          in: query
+          schema: {type: string, enum: [ACTIVE, INACTIVE, ALL], default: ALL}
+      responses:
+        '200':
+          description: One page of tenants
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceTenantPage'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
     post:
       summary: Step 1 of onboard-tenant, create the tenant as pending
       description: A repeat of the same `Idempotency-Key` answers `200` with the first tenant, whatever the body says now. Role `SERVICE`.
@@ -352,6 +383,462 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '500':
           $ref: '#/components/responses/Error'
+  /api/v1/identity-audit/tenant/logo:
+    put:
+      summary: Save or replace the logo of the caller's tenant
+      description: Role `TENANT_ADMINISTRATOR`. Only PNG, JPEG and WebP, proved by the bytes, at most 256 KB; a body of up to 1.5 MB is read on this route. A refused file leaves the previous logo.
+      operationId: setTenantLogo
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TenantImageRequest'
+      responses:
+        '200':
+          description: Saved; the tenant is returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantResponse'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '413':
+          $ref: '#/components/responses/Error'
+        '415':
+          $ref: '#/components/responses/Error'
+        '422':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+    delete:
+      summary: Remove the logo of the caller's tenant
+      description: Role `TENANT_ADMINISTRATOR`. `204` also when there was none.
+      operationId: removeTenantLogo
+      security:
+        - bearerAuth: []
+      responses:
+        '204':
+          description: There is none now
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '422':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+  /api/v1/identity-audit/tenant/images/{position}:
+    parameters:
+      - name: position
+        in: path
+        required: true
+        schema: {type: string}
+    put:
+      summary: Save or replace a commercial image of the caller's tenant
+      description: Role `TENANT_ADMINISTRATOR`. Position 0 to 4, at most 1 MB; same rules as the logo.
+      operationId: setTenantImage
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TenantImageRequest'
+      responses:
+        '200':
+          description: Saved; the tenant is returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantResponse'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '413':
+          $ref: '#/components/responses/Error'
+        '415':
+          $ref: '#/components/responses/Error'
+        '422':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+    delete:
+      summary: Remove a commercial image of the caller's tenant
+      description: Role `TENANT_ADMINISTRATOR`. `204` also when there was none at that position.
+      operationId: removeTenantImage
+      security:
+        - bearerAuth: []
+      responses:
+        '204':
+          description: There is none now
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '422':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+  /api/v1/identity-audit/tenant/localization:
+    get:
+      summary: Read the time zone and the country of the caller's tenant
+      description: Gives the Tenant Administrator the tenant named by the token's `tenantId` claim with its current time zone and country (HU-IDA-004, rule RN-IDA-API-107); the tenant never comes from the path or the query. An inactive tenant is read all the same (`200`). Role `TENANT_ADMINISTRATOR`; the Platform Administrator, a `SERVICE`, any other role and the token of an exceptional or emergency access are `403`.
+      operationId: getTenantLocalization
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: The tenant with its current zone and country
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantResponse'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+    put:
+      summary: Change the time zone and the country of the caller's tenant
+      description: Changes the official time zone, the country, or both, of the tenant named by the token's `tenantId` claim, from now on only (HU-IDA-004); the path and the body name no tenant. The same values answer `200` and change nothing, and no `Idempotency-Key` is asked because nothing is created. At least one field is sent; a field that is not declared, a zone that is not an existing IANA name or a country that is not a supported ISO 3166-1 code is `400` naming the field. A change of zone is `422 BUSINESS_RULE_VIOLATION` while any cash box of the tenant is open or pending closing, and an inactive tenant is `422` too; a change of country alone is not blocked by cash. If the cash boxes cannot be read the answer is `503` and nothing changes. Role `TENANT_ADMINISTRATOR`; the Platform Administrator, a `SERVICE`, any other role and the token of an exceptional or emergency access are `403`.
+      operationId: changeTenantLocalization
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LocalizationRequest'
+      responses:
+        '200':
+          description: The tenant with its current zone and country
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantResponse'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '413':
+          $ref: '#/components/responses/Error'
+        '415':
+          $ref: '#/components/responses/Error'
+        '422':
+          description: The tenant is not active, or a cash box is open or pending closing (`BUSINESS_RULE_VIOLATION`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/Error'
+        '503':
+          description: The state of the cash boxes could not be read, so nothing changed (`SERVICE_UNAVAILABLE`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/identity-audit/tenant/audit-access:
+    get:
+      summary: The audit access of the optional roles of the caller's tenant
+      description: The three optional roles and whether each may consult the audit of the tenant named by the token's `tenantId` claim; a role never set is `false`. Always the three, so it is not paginated and has no `meta`. Role `TENANT_ADMINISTRATOR`; the Platform Administrator, a `SERVICE` and any other role are `403`.
+      operationId: listAuditAccess
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: The three optional roles, always all three
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    minItems: 3
+                    maxItems: 3
+                    items:
+                      $ref: '#/components/schemas/AuditAccessResponse'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+  /api/v1/identity-audit/tenant/audit-access/{role}:
+    put:
+      summary: Enable or remove the audit access of an optional role
+      description: Sets whether the role may consult the audit of the caller's tenant; the tenant never comes from the path or the body. A real change keeps, in the same transaction, the audit record `AUDIT_ACCESS_ENABLED` or `AUDIT_ACCESS_DISABLED` with who and when. It is idempotent by nature, so it takes no `Idempotency-Key`; setting what is already set answers `200` and records nothing. A role that is not one of the three, a field that is not declared or a missing `enabled` is `400`, and the value of the role is not repeated. Role `TENANT_ADMINISTRATOR`.
+      operationId: setAuditAccess
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: role
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/OptionalRole'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuditAccessRequest'
+      responses:
+        '200':
+          description: The access as it is now
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditAccessResponse'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '413':
+          $ref: '#/components/responses/Error'
+        '415':
+          $ref: '#/components/responses/Error'
+        '422':
+          description: The setting changed while the request was being decided twice in a row (`BUSINESS_RULE_VIOLATION`); the caller sends it again
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/Error'
+  /api/v1/identity-audit/audit-records:
+    get:
+      summary: List the audit across tenants
+      description: The audit records of every tenant, newest first, and by id among equal times. `tenantId` narrows it to one tenant. A `limit` outside 1 to 100, a `page` below 1, a period that ends before it starts, an action that does not exist, a filter that is not declared or one sent twice is `400`. Role `PLATFORM_ADMINISTRATOR`; a user of a tenant, of any role, and a `SERVICE` are `403`.
+      operationId: listPlatformAuditRecords
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tenantId
+          in: query
+          description: Only the records of this tenant
+          schema: {type: string, format: uuid}
+        - name: page
+          in: query
+          schema: {type: integer, minimum: 1, default: 1}
+        - name: limit
+          in: query
+          schema: {type: integer, minimum: 1, maximum: 100, default: 20}
+        - name: from
+          in: query
+          description: Start of the period, RFC 3339 in UTC, inclusive
+          schema: {type: string, format: date-time}
+        - name: to
+          in: query
+          description: End of the period, RFC 3339 in UTC, exclusive; before `from` is `400`
+          schema: {type: string, format: date-time}
+        - name: action
+          in: query
+          description: Only the records of this action; any other is `400`
+          schema:
+            type: string
+            enum: [ACCOUNT_SESSIONS_REVOKED, ACCOUNT_BLOCKED, SPECIAL_PERMISSION_GRANTED, SPECIAL_PERMISSION_REVOKED, OPTIONAL_ROLE_ENABLED, OPTIONAL_ROLE_DISABLED, TENANT_CREATED, TENANT_INACTIVATED, TENANT_REACTIVATED, AUDIT_ACCESS_ENABLED, AUDIT_ACCESS_DISABLED, ACCOUNT_EMAIL_VERIFIED, RESERVATION_CREATED, RESERVATION_MODIFIED, CAPACITY_ALLOCATED, CAPACITY_RELEASED, PAYMENT_EVIDENCE_REGISTERED, PAYMENT_VALIDATED, PAYMENT_REJECTED, RESERVATION_CONFIRMED, RESERVATION_CANCELLED, REFUND_AUTHORIZED, CLIENT_NOTIFIED, CUSTOMER_REGISTERED, DISCOUNT_RULE_CHANGED, SENSITIVE_DATA_ACCESSED, SENSITIVE_DATA_DELETED, PAYMENT_PARAMETERS_CHANGED, PLATFORM_EXCEPTIONAL_ACCESS_OPENED, PLATFORM_EXCEPTIONAL_ACCESS_CLOSED, PLATFORM_EXCEPTIONAL_ACCESS_USED, TENANT_LOCALIZATION_CHANGED, CASH_SESSION_OPENED, CASH_SESSION_CLOSED, CASH_SESSION_AUTO_CREATED, CASH_SESSION_AUTO_CLOSED, CASH_SESSION_REOPENED, CASH_INCOME_RECORDED, OPERATIONAL_PAYMENT_RECORDED, OPERATIONAL_EXPENSE_RECORDED, REFUND_EXECUTED, SALIDA_SCHEDULED, SALIDA_RESCHEDULED, SALIDA_VEHICLES_CHANGED, SALIDA_EXECUTION_STARTED, SALIDA_FINALIZED, SALIDA_MARKED_PENDIENTE_DE_REGULARIZACION, SALIDA_CANCELLED, EXTRAORDINARY_CANCELLATION_RECORDED, OPERATIONAL_COST_RECORDED, PASSWORD_RECOVERY_REQUESTED, PASSWORD_RESET, PASSWORD_RESET_FAILED]
+      responses:
+        '200':
+          description: One page of audit records
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditRecordPage'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+  /api/v1/identity-audit/tenants/{tenantId}/audit-records:
+    get:
+      summary: List the audit of one tenant
+      description: The audit records of the tenant, newest first. Read by its `TENANT_ADMINISTRATOR`, and by a `MANAGER`, `ACCOUNTANT` or `ANALYST` only while the audit access of their role is enabled in that tenant. The tenant of the path must be the token's `tenantId`; another tenant is `404` for every role, judged before the role. The Platform Administrator, a `SERVICE`, a collaborator and a final customer are `403`. A query that is malformed is `400` whoever asks. A filter that is not declared, `tenantId` included, is `400`.
+      operationId: listAuditRecords
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/TenantIdPath'
+        - name: page
+          in: query
+          schema: {type: integer, minimum: 1, default: 1}
+        - name: limit
+          in: query
+          schema: {type: integer, minimum: 1, maximum: 100, default: 20}
+        - name: from
+          in: query
+          description: Start of the period, RFC 3339 in UTC, inclusive
+          schema: {type: string, format: date-time}
+        - name: to
+          in: query
+          description: End of the period, RFC 3339 in UTC, exclusive; before `from` is `400`
+          schema: {type: string, format: date-time}
+        - name: action
+          in: query
+          description: Only the records of this action; any other is `400`
+          schema:
+            type: string
+            enum: [ACCOUNT_SESSIONS_REVOKED, ACCOUNT_BLOCKED, SPECIAL_PERMISSION_GRANTED, SPECIAL_PERMISSION_REVOKED, OPTIONAL_ROLE_ENABLED, OPTIONAL_ROLE_DISABLED, TENANT_CREATED, TENANT_INACTIVATED, TENANT_REACTIVATED, AUDIT_ACCESS_ENABLED, AUDIT_ACCESS_DISABLED, ACCOUNT_EMAIL_VERIFIED, RESERVATION_CREATED, RESERVATION_MODIFIED, CAPACITY_ALLOCATED, CAPACITY_RELEASED, PAYMENT_EVIDENCE_REGISTERED, PAYMENT_VALIDATED, PAYMENT_REJECTED, RESERVATION_CONFIRMED, RESERVATION_CANCELLED, REFUND_AUTHORIZED, CLIENT_NOTIFIED, CUSTOMER_REGISTERED, DISCOUNT_RULE_CHANGED, SENSITIVE_DATA_ACCESSED, SENSITIVE_DATA_DELETED, PAYMENT_PARAMETERS_CHANGED, PLATFORM_EXCEPTIONAL_ACCESS_OPENED, PLATFORM_EXCEPTIONAL_ACCESS_CLOSED, PLATFORM_EXCEPTIONAL_ACCESS_USED, TENANT_LOCALIZATION_CHANGED, CASH_SESSION_OPENED, CASH_SESSION_CLOSED, CASH_SESSION_AUTO_CREATED, CASH_SESSION_AUTO_CLOSED, CASH_SESSION_REOPENED, CASH_INCOME_RECORDED, OPERATIONAL_PAYMENT_RECORDED, OPERATIONAL_EXPENSE_RECORDED, REFUND_EXECUTED, SALIDA_SCHEDULED, SALIDA_RESCHEDULED, SALIDA_VEHICLES_CHANGED, SALIDA_EXECUTION_STARTED, SALIDA_FINALIZED, SALIDA_MARKED_PENDIENTE_DE_REGULARIZACION, SALIDA_CANCELLED, EXTRAORDINARY_CANCELLATION_RECORDED, OPERATIONAL_COST_RECORDED, PASSWORD_RECOVERY_REQUESTED, PASSWORD_RESET, PASSWORD_RESET_FAILED]
+      responses:
+        '200':
+          description: One page of audit records
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditRecordPage'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+  /api/v1/identity-audit/tenant/audit-records:
+    get:
+      summary: List the audit of the caller's own tenant
+      description: The same records as the audit of one tenant, for the tenant named by the token's `tenantId` claim, so a caller that does not know the identifier of its tenant can read it. Read by its `TENANT_ADMINISTRATOR`, and by a `MANAGER`, `ACCOUNTANT` or `ANALYST` only while the audit access of their role is enabled. The Platform Administrator, a `SERVICE`, a collaborator and a final customer are `403`. The tenant is never taken from the request; a filter that is not declared, `tenantId` included, is `400`. There is no `404`, because the caller cannot name another tenant.
+      operationId: listOwnAuditRecords
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema: {type: integer, minimum: 1, default: 1}
+        - name: limit
+          in: query
+          schema: {type: integer, minimum: 1, maximum: 100, default: 20}
+        - name: from
+          in: query
+          description: Start of the period, RFC 3339 in UTC, inclusive
+          schema: {type: string, format: date-time}
+        - name: to
+          in: query
+          description: End of the period, RFC 3339 in UTC, exclusive; before `from` is `400`
+          schema: {type: string, format: date-time}
+        - name: action
+          in: query
+          description: Only the records of this action; any other is `400`
+          schema:
+            type: string
+            enum: [ACCOUNT_SESSIONS_REVOKED, ACCOUNT_BLOCKED, SPECIAL_PERMISSION_GRANTED, SPECIAL_PERMISSION_REVOKED, OPTIONAL_ROLE_ENABLED, OPTIONAL_ROLE_DISABLED, TENANT_CREATED, TENANT_INACTIVATED, TENANT_REACTIVATED, AUDIT_ACCESS_ENABLED, AUDIT_ACCESS_DISABLED, ACCOUNT_EMAIL_VERIFIED, RESERVATION_CREATED, RESERVATION_MODIFIED, CAPACITY_ALLOCATED, CAPACITY_RELEASED, PAYMENT_EVIDENCE_REGISTERED, PAYMENT_VALIDATED, PAYMENT_REJECTED, RESERVATION_CONFIRMED, RESERVATION_CANCELLED, REFUND_AUTHORIZED, CLIENT_NOTIFIED, CUSTOMER_REGISTERED, DISCOUNT_RULE_CHANGED, SENSITIVE_DATA_ACCESSED, SENSITIVE_DATA_DELETED, PAYMENT_PARAMETERS_CHANGED, PLATFORM_EXCEPTIONAL_ACCESS_OPENED, PLATFORM_EXCEPTIONAL_ACCESS_CLOSED, PLATFORM_EXCEPTIONAL_ACCESS_USED, TENANT_LOCALIZATION_CHANGED, CASH_SESSION_OPENED, CASH_SESSION_CLOSED, CASH_SESSION_AUTO_CREATED, CASH_SESSION_AUTO_CLOSED, CASH_SESSION_REOPENED, CASH_INCOME_RECORDED, OPERATIONAL_PAYMENT_RECORDED, OPERATIONAL_EXPENSE_RECORDED, REFUND_EXECUTED, SALIDA_SCHEDULED, SALIDA_RESCHEDULED, SALIDA_VEHICLES_CHANGED, SALIDA_EXECUTION_STARTED, SALIDA_FINALIZED, SALIDA_MARKED_PENDIENTE_DE_REGULARIZACION, SALIDA_CANCELLED, EXTRAORDINARY_CANCELLATION_RECORDED, OPERATIONAL_COST_RECORDED, PASSWORD_RECOVERY_REQUESTED, PASSWORD_RESET, PASSWORD_RESET_FAILED]
+      responses:
+        '200':
+          description: One page of audit records
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditRecordPage'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+  /api/v1/identity-audit/public/tenants/{identifier}/logo:
+    parameters:
+      - name: identifier
+        in: path
+        required: true
+        schema: {type: string}
+      - name: v
+        in: query
+        required: false
+        schema: {type: string}
+        description: The start of the hash of the file; it only makes a replaced file a new url, and it is ignored here
+    get:
+      summary: The logo of a tenant
+      description: No sign-in. An unknown or unfinished tenant, or one without a logo, is `404`; an inactive tenant is served.
+      operationId: getPublicTenantLogo
+      responses:
+        '200':
+          description: The file, with the kind that was proved
+          headers:
+            X-Content-Type-Options: {schema: {type: string}}
+            Content-Security-Policy: {schema: {type: string}}
+            Content-Disposition: {schema: {type: string}}
+            Cache-Control: {schema: {type: string}}
+          content:
+            image/png: {schema: {type: string, format: binary}}
+            image/jpeg: {schema: {type: string, format: binary}}
+            image/webp: {schema: {type: string, format: binary}}
+        '401':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+  /api/v1/identity-audit/public/tenants/{identifier}/images/{position}:
+    parameters:
+      - name: identifier
+        in: path
+        required: true
+        schema: {type: string}
+      - name: position
+        in: path
+        required: true
+        schema: {type: string}
+      - name: v
+        in: query
+        required: false
+        schema: {type: string}
+        description: The start of the hash of the file; it only makes a replaced file a new url, and it is ignored here
+    get:
+      summary: A commercial image of a tenant
+      description: Same rules as the logo.
+      operationId: getPublicTenantImage
+      responses:
+        '200':
+          description: The file, with the kind that was proved
+          headers:
+            X-Content-Type-Options: {schema: {type: string}}
+            Content-Security-Policy: {schema: {type: string}}
+            Content-Disposition: {schema: {type: string}}
+            Cache-Control: {schema: {type: string}}
+          content:
+            image/png: {schema: {type: string, format: binary}}
+            image/jpeg: {schema: {type: string, format: binary}}
+            image/webp: {schema: {type: string, format: binary}}
+        '401':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
   /api/v1/identity-audit/public/tenants/{identifier}:
     get:
       summary: Public profile of a tenant, behind the link /t/{identifier}
@@ -380,6 +867,102 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '404':
           $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+  /api/v1/identity-audit/internal/tenants/{tenantId}/events:
+    post:
+      summary: Receive an event of another service
+      description: |
+        Job 7 delivers the events of the security microservice (ADR-004 D4 and D5). Each one becomes one audit record
+        (HU-IDA-002 AC1): the action is the event type in SCREAMING_SNAKE_CASE, the actor is `actorId` or, when the
+        event has none, `multi-tour-security`, the record affected is `accounts/{aggregateId}` (`tenants/{aggregateId}`
+        for the optional-role events), the new value is the payload, the time is `occurredAt`, and `previousValue`,
+        `channelOrModule` and `functionalProcessReference` are read from the payload when it has them (AC2).
+        `AccountSessionsRevoked` also names, in its payload, the account and the time from which its sessions no longer
+        count: the service keeps, per account, the latest cutoff it received and answers `401` to a token of that
+        account issued before it. The `Idempotency-Key` is the id of the event. The first time is `201`; a repeat of
+        the event id is `200` and keeps nothing new (AC7), and so is a revocation older than the cutoff already kept.
+        The tenant of the path must be the one of the event. Only the role `SERVICE`. The body is tolerant of fields it
+        does not name, up to 16 KB.
+      operationId: receiveSessionEvent
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/TenantIdPath'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlatformEventEnvelope'
+      responses:
+        '201':
+          description: The event was recorded
+        '200':
+          description: The event was already received, or it is a revocation older than the cutoff already kept
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '413':
+          $ref: '#/components/responses/Error'
+        '415':
+          $ref: '#/components/responses/Error'
+        '422':
+          description: The change lost the race twice in a row (`BUSINESS_RULE_VIOLATION`); the caller sends it again
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/Error'
+  /api/v1/identity-audit/internal/events:
+    post:
+      summary: Receive an event that belongs to no tenant
+      description: |
+        The route of the events that carry no `tenantId`: those of a Platform Administrator's account, which has no
+        tenant (ADR-004 D4). Job 7 sends here the event types this service consumes when the event has no tenant; an
+        event that has one goes to `/internal/tenants/{tenantId}/events`. Each route answers `400` to the envelope of
+        the other, so an event is never recorded under another tenant, or under none, by mistake. The body is the same
+        envelope and what is done with it is the same: one audit record with `tenantId` null (`201` the first time,
+        `200` for a repeat of the event id), and for `AccountSessionsRevoked` the cutoff of the account, which has no
+        tenant either. An account whose cutoff holds a tenant is refused with `400`: an account belongs to one tenant
+        or to none. Only the role `SERVICE`. The body is tolerant of fields it does not name, up to 16 KB.
+      operationId: receivePlatformEvent
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlatformEventEnvelope'
+      responses:
+        '201':
+          description: The event was recorded
+        '200':
+          description: The event was already received, or it is a revocation older than the cutoff already kept
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '413':
+          $ref: '#/components/responses/Error'
+        '415':
+          $ref: '#/components/responses/Error'
+        '422':
+          description: The change lost the race twice in a row (`BUSINESS_RULE_VIOLATION`); the caller sends it again
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '500':
           $ref: '#/components/responses/Error'
   /api/v1/identity-audit/internal/outbox:
@@ -586,6 +1169,34 @@ components:
         failedStep:
           type: string
           enum: [CREATE_ACCOUNT, APPLY_STATUS]
+    ServiceTenantPage:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: array
+          items:
+            type: object
+            required: [tenantId, status]
+            additionalProperties: false
+            properties:
+              tenantId: {type: string, format: uuid}
+              status: {type: string, enum: [PENDING, ACTIVE, INACTIVE, FAILED]}
+        meta:
+          type: object
+          required: [page, limit, total, totalPages]
+          properties:
+            page: {type: integer, minimum: 1}
+            limit: {type: integer, minimum: 1, maximum: 100}
+            total: {type: integer, minimum: 0}
+            totalPages: {type: integer, minimum: 0}
+    TenantImageRequest:
+      type: object
+      required: [contentType, data]
+      additionalProperties: false
+      properties:
+        contentType: {type: string, enum: [image/png, image/jpeg, image/webp]}
+        data: {type: string, format: byte}
     TenantPage:
       type: object
       required: [data, meta]
@@ -626,6 +1237,19 @@ components:
           enum: [ACTIVE, INACTIVE]
         visualIdentity:
           $ref: '#/components/schemas/VisualIdentity'
+        logoUrl:
+          type: string
+          nullable: true
+        images:
+          type: array
+          maxItems: 5
+          items:
+            type: object
+            required: [position, url]
+            additionalProperties: false
+            properties:
+              position: {type: integer, minimum: 0, maximum: 4}
+              url: {type: string}
     HexColor:
       type: string
       pattern: '^#[0-9A-Fa-f]{6}$'
@@ -641,6 +1265,56 @@ components:
           $ref: '#/components/schemas/HexColor'
         secondaryColor:
           $ref: '#/components/schemas/HexColor'
+    AuditRecordResponse:
+      type: object
+      description: Immutable audit evidence; `tenantId` is null for an action of the platform
+      required: [auditRecordId, tenantId, actorId, action, affectedRecordId, recordedAt]
+      properties:
+        auditRecordId: {type: string, format: uuid}
+        tenantId: {type: string, format: uuid, nullable: true}
+        actorId: {type: string, description: The account id of the person or the name of the service that did it}
+        action: {type: string, description: The type of the event in SCREAMING_SNAKE_CASE; a publisher that is new may bring one that is not in the list of the filter}
+        affectedRecordId: {type: string}
+        reason: {type: string, nullable: true}
+        previousValue: {type: object, nullable: true, additionalProperties: true}
+        newValue: {type: object, nullable: true, additionalProperties: true}
+        channelOrModule: {type: string, nullable: true}
+        functionalProcessReference: {type: string, nullable: true}
+        recordedAt: {type: string, format: date-time}
+    AuditRecordPage:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditRecordResponse'
+        meta:
+          type: object
+          required: [page, limit, total, totalPages]
+          properties:
+            page: {type: integer, minimum: 1}
+            limit: {type: integer, minimum: 1, maximum: 100}
+            total: {type: integer, minimum: 0}
+            totalPages: {type: integer, minimum: 0}
+    OptionalRole:
+      type: string
+      enum: [MANAGER, ACCOUNTANT, ANALYST]
+    AuditAccessRequest:
+      type: object
+      required: [enabled]
+      additionalProperties: false
+      properties:
+        enabled: {type: boolean}
+    AuditAccessResponse:
+      type: object
+      required: [role, enabled]
+      properties:
+        role:
+          $ref: '#/components/schemas/OptionalRole'
+        enabled: {type: boolean}
+        changedBy: {type: string, format: uuid, nullable: true, description: The account that changed it last; null if it was never set}
+        changedAt: {type: string, format: date-time, nullable: true}
     VisualIdentityRequest:
       type: object
       description: Both colors are always sent (PUT replaces); nothing else can be set
@@ -651,6 +1325,18 @@ components:
           $ref: '#/components/schemas/HexColor'
         secondaryColor:
           $ref: '#/components/schemas/HexColor'
+    LocalizationRequest:
+      type: object
+      description: At least one of the two fields; nothing else can be set
+      minProperties: 1
+      additionalProperties: false
+      properties:
+        timeZone:
+          type: string
+          maxLength: 64
+        country:
+          type: string
+          pattern: '^[A-Z]{2}$'
     OutboxPage:
       type: object
       required: [data, meta]
@@ -677,6 +1363,32 @@ components:
           description: Trimmed; no control character, new lines included; at most 1000 UTF-16 units
           minLength: 1
           maxLength: 1000
+    PlatformEventEnvelope:
+      type: object
+      description: |
+        The envelope of ADR-004 D4 as job 7 delivers it; fields it does not name are tolerated. The payload of
+        `AccountSessionsRevoked` must carry `accountId` and `revokedFrom` (RFC 3339 in UTC), or the event is `400`; any
+        other payload is kept as it comes, as the new value of the record.
+      required: [eventId, eventType, eventVersion, aggregateId, payload, occurredAt]
+      additionalProperties: true
+      properties:
+        eventId: {type: string, format: uuid}
+        eventType:
+          type: string
+          pattern: '^[A-Z][A-Za-z0-9]{0,63}$'
+          description: Any type the relay routes here; today the six events of the security microservice
+          example: SpecialPermissionGranted
+        eventVersion: {type: integer, minimum: 1}
+        tenantId: {type: string, format: uuid, description: "Absent for the accounts of the Platform Administrator; the tenant route requires it and `/internal/events` refuses it"}
+        aggregateId: {type: string, format: uuid, description: "The account the event is about, or the tenant for the optional-role events"}
+        actorId: {type: string, nullable: true, description: Who did it; absent when the publisher did it on its own}
+        reason: {type: string, nullable: true}
+        correlationId: {type: string}
+        payload:
+          type: object
+          additionalProperties: true
+          description: The full new state of the aggregate; never a credential
+        occurredAt: {type: string, format: date-time}
     OutboxEvent:
       type: object
       description: An event waiting to be delivered, with the envelope of ADR-004 D4

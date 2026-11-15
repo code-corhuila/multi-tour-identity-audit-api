@@ -3,6 +3,8 @@ package co.edu.corhuila.multi_tour.identity_audit.adapters.security;
 import co.edu.corhuila.multi_tour.identity_audit.adapters.http.ErrorBody;
 import co.edu.corhuila.multi_tour.identity_audit.core.security.Caller;
 import co.edu.corhuila.multi_tour.identity_audit.core.security.Role;
+import co.edu.corhuila.multi_tour.identity_audit.core.session.SessionCutoff;
+import co.edu.corhuila.multi_tour.identity_audit.core.session.SessionCutoffs;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nimbusds.jose.JOSEException;
 import com.nimbusds.jose.JWSAlgorithm;
@@ -16,10 +18,12 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.security.interfaces.RSAPublicKey;
 import java.text.ParseException;
+import java.time.temporal.ChronoUnit;
 import java.util.Date;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.Ordered;
@@ -32,7 +36,8 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 /**
  * Validates the token by itself (norm 5.3): algorithm exactly RS256, signed by the key of the security
- * microservice, {@code exp} and {@code sub} required, 30 s of tolerance. A valid one becomes the
+ * microservice, {@code exp} and {@code sub} required, 30 s of tolerance. A token issued before the cutoff of its
+ * account ({@code AccountSessionsRevoked}, ADR-004 D5) is refused too. A valid one becomes the
  * {@link Caller} of the request; anything else is a 401 with the single envelope. Which routes need
  * one is decided by {@link RouteGuard}.
  */
@@ -42,6 +47,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
   public static final String CALLER = JwtAuthFilter.class.getName() + ".caller";
   private static final long LEEWAY_MILLIS = 30_000;
+  private static final Set<String> ACCESS_WORDS = Set.of("RESERVATIONS", "CATALOG", "OPERATIONS", "CASH", "CUSTOMERS", "SENSITIVE");
 
   /** What an event keeps of its actor: the subject of the token is recorded as it comes. */
   private static final int MAX_SUBJECT = 100;
@@ -50,11 +56,13 @@ public class JwtAuthFilter extends OncePerRequestFilter {
   private final ObjectMapper mapper;
   private final String issuer;
   private final String audience;
+  private final SessionCutoffs cutoffs;
 
   /** {@code issuer} and {@code audience} are checked only when the operator sets them (JWT_ISSUER, JWT_AUDIENCE). */
   JwtAuthFilter(
       RSAPublicKey key, ObjectMapper mapper, @Value("${JWT_ISSUER:}") String issuer,
-      @Value("${JWT_AUDIENCE:}") String audience) {
+      @Value("${JWT_AUDIENCE:}") String audience, SessionCutoffs cutoffs) {
+    this.cutoffs = cutoffs;
     this.verifier = new RSASSAVerifier(key);
     this.mapper = mapper;
     this.issuer = issuer.strip();
@@ -70,7 +78,9 @@ public class JwtAuthFilter extends OncePerRequestFilter {
   protected void doFilterInternal(
       HttpServletRequest request, HttpServletResponse response, FilterChain chain)
       throws ServletException, IOException {
-    Caller caller = caller(request.getHeader(HttpHeaders.AUTHORIZATION));
+    Verified verified = verified(request.getHeader(HttpHeaders.AUTHORIZATION));
+    // the lookup is outside the parsing on purpose: a fault of the database is a 500, never a token let through
+    Caller caller = verified == null || revoked(verified) ? null : verified.caller();
     if (caller == null) {
       response.setStatus(HttpStatus.UNAUTHORIZED.value());
       response.setHeader(HttpHeaders.WWW_AUTHENTICATE, "Bearer");
@@ -83,8 +93,23 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     chain.doFilter(request, response);
   }
 
+  /** A valid token: who it names and when it was issued ({@code null} when it carries no {@code iat}). */
+  private record Verified(Caller caller, Date issuedAt) {}
+
+  /**
+   * True when the account has a cutoff and the token was not issued at or after it. Compared at the precision of the
+   * token (seconds): a sign-in made in the second of the revocation is a new session, not an old one. A token with no
+   * {@code iat} cannot be shown to be later, so it is refused when its account has a cutoff.
+   */
+  private boolean revoked(Verified token) {
+    return cutoffs.find(token.caller().subject())
+        .map(SessionCutoff::revokedFrom)
+        .map(from -> token.issuedAt() == null || token.issuedAt().toInstant().isBefore(from.truncatedTo(ChronoUnit.SECONDS)))
+        .orElse(false);
+  }
+
   /** The caller of a valid token, or null for anything that is not one. */
-  private Caller caller(String authorization) {
+  private Verified verified(String authorization) {
     if (authorization == null || !authorization.regionMatches(true, 0, "Bearer ", 0, 7)) {
       return null;
     }
@@ -116,7 +141,11 @@ public class JwtAuthFilter extends OncePerRequestFilter {
       // only the marks this service understands pass: `restricted` (it still opens nothing here) and none. The token of a
       // temporary credential (`password-change`) only serves the route that chooses a password, in the security service
       String access = claims.getStringClaim("access");
-      if (access != null && !"restricted".equals(access)) {
+      boolean exceptional = "exceptional".equals(access) || "emergency".equals(access);
+      if (access != null && !"restricted".equals(access) && !exceptional) {
+        return null;
+      }
+      if (exceptional && !wellFormedAccess(claims)) {
         return null;
       }
       List<String> names = claims.getStringListClaim("roles");
@@ -124,10 +153,25 @@ public class JwtAuthFilter extends OncePerRequestFilter {
       for (String name : names == null ? List.<String>of() : names) {
         roles.add(Role.valueOf(name));
       }
-      return new Caller(subject, claims.getStringClaim("tenantId"), roles);
+      return new Verified(new Caller(subject, claims.getStringClaim("tenantId"), roles, exceptional), claims.getIssueTime());
     } catch (ParseException | JOSEException | RuntimeException e) {
       // anything a hostile but signed token can provoke is a refusal, never a server error
       return null;
+    }
+  }
+
+  /** The claims of an access to one tenant in their closed shapes: scope words of the contract and the ids in canonical form (spec 012). */
+  private static boolean wellFormedAccess(JWTClaimsSet claims) throws ParseException {
+    List<String> scope = claims.getStringListClaim("scope");
+    return scope != null && !scope.isEmpty() && ACCESS_WORDS.containsAll(scope)
+        && isCanonicalUuid(claims.getStringClaim("authorizationId")) && isCanonicalUuid(claims.getStringClaim("tenantId"));
+  }
+
+  private static boolean isCanonicalUuid(String text) {
+    try {
+      return text != null && UUID.fromString(text).toString().equalsIgnoreCase(text);
+    } catch (IllegalArgumentException notAnId) {
+      return false;
     }
   }
 

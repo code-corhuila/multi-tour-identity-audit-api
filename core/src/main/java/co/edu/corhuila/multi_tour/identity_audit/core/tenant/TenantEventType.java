@@ -4,7 +4,9 @@ package co.edu.corhuila.multi_tour.identity_audit.core.tenant;
 public enum TenantEventType {
   TENANT_CREATED("TenantCreated"),
   TENANT_INACTIVATED("TenantInactivated"),
-  TENANT_REACTIVATED("TenantReactivated");
+  TENANT_REACTIVATED("TenantReactivated"),
+  /** The zone or the country changed, forward only (spec 010 of the API, HU-IDA-004). */
+  TENANT_LOCALIZATION_CHANGED("TenantLocalizationChanged");
 
   private final String eventType;
 

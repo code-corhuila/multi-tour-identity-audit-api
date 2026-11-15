@@ -223,11 +223,11 @@ class VisualIdentityRouteTest extends ShellTest {
   }
 
   @Test
-  void C_public_profile_still_reveals_only_four_fields() {
+  void C_public_profile_reveals_only_its_six_fields() {
     set(administratorOf(A), colors("#146b5d", "#0f564b"));
     Response response = given().filter(Contract.filter()).get(PROFILE + "acme-tours");
     assertThat(response.jsonPath().getMap("$").keySet())
-        .containsExactlyInAnyOrder("identifier", "commercialName", "tenantStatus", "visualIdentity");
+        .containsExactlyInAnyOrder("identifier", "commercialName", "tenantStatus", "visualIdentity", "logoUrl", "images");
     assertThat(response.jsonPath().getMap("visualIdentity").keySet())
         .containsExactlyInAnyOrder("primaryColor", "secondaryColor");
   }

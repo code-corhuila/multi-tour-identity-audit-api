@@ -1,0 +1,64 @@
+package co.edu.corhuila.multi_tour.identity_audit.core.audit;
+
+import co.edu.corhuila.multi_tour.identity_audit.core.tenant.InvalidDataException;
+import java.util.Locale;
+import java.util.Set;
+import java.util.regex.Pattern;
+
+/**
+ * The action of an audit record is the type of the event it came from, in SCREAMING_SNAKE_CASE, until {@code 02-domain}
+ * closes the list (DP-IDA-M-04). {@link #KNOWN} is the list of the events that exist today: a filter by any other action is
+ * refused, while recording accepts any event type, so a new publisher needs no change here to be recorded.
+ */
+public final class AuditAction {
+
+  public static final Set<String> KNOWN = Set.of(
+      "ACCOUNT_SESSIONS_REVOKED", "ACCOUNT_BLOCKED", "SPECIAL_PERMISSION_GRANTED", "SPECIAL_PERMISSION_REVOKED",
+      "OPTIONAL_ROLE_ENABLED", "OPTIONAL_ROLE_DISABLED", "TENANT_CREATED", "TENANT_INACTIVATED", "TENANT_REACTIVATED",
+      "AUDIT_ACCESS_ENABLED", "AUDIT_ACCESS_DISABLED",
+      // the events of other services that the audit records (spec 008)
+      "ACCOUNT_EMAIL_VERIFIED", "RESERVATION_CREATED", "RESERVATION_MODIFIED",
+      "CAPACITY_ALLOCATED", "CAPACITY_RELEASED", "PAYMENT_EVIDENCE_REGISTERED",
+      "PAYMENT_VALIDATED", "PAYMENT_REJECTED", "RESERVATION_CONFIRMED",
+      "RESERVATION_CANCELLED", "REFUND_AUTHORIZED", "CLIENT_NOTIFIED",
+      "CUSTOMER_REGISTERED", "DISCOUNT_RULE_CHANGED", "SENSITIVE_DATA_ACCESSED",
+      // the exceptional access of the Platform Administrator to a tenant (spec 009)
+      "PLATFORM_EXCEPTIONAL_ACCESS_OPENED", "PLATFORM_EXCEPTIONAL_ACCESS_CLOSED",
+      // each use of the token of that access by the services (spec 012)
+      "PLATFORM_EXCEPTIONAL_ACCESS_USED",
+      // the change of the zone or the country of a tenant (spec 010 of the API, HU-IDA-004)
+      "TENANT_LOCALIZATION_CHANGED",
+      // the events of cash-reporting and of operations-cost, and the recovery of the password (spec 008, amended 2026-11-12)
+      "CASH_SESSION_OPENED", "CASH_SESSION_CLOSED", "CASH_SESSION_AUTO_CREATED", "CASH_SESSION_AUTO_CLOSED", "CASH_SESSION_REOPENED",
+      "CASH_INCOME_RECORDED", "OPERATIONAL_PAYMENT_RECORDED", "OPERATIONAL_EXPENSE_RECORDED", "REFUND_EXECUTED",
+      "SALIDA_SCHEDULED", "SALIDA_RESCHEDULED", "SALIDA_VEHICLES_CHANGED", "SALIDA_EXECUTION_STARTED", "SALIDA_FINALIZED",
+      "SALIDA_MARKED_PENDIENTE_DE_REGULARIZACION", "SALIDA_CANCELLED", "EXTRAORDINARY_CANCELLATION_RECORDED", "OPERATIONAL_COST_RECORDED",
+      "PASSWORD_RECOVERY_REQUESTED", "PASSWORD_RESET", "PASSWORD_RESET_FAILED",
+      // the deletion of the sensitive data of a reservation one year after its service (spec 013)
+      "SENSITIVE_DATA_DELETED",
+      // the change of a payment parameter of a tenant (spec 013 amendment)
+      "PAYMENT_PARAMETERS_CHANGED");
+
+  private static final int MAX_LENGTH = 64;
+  private static final Pattern EVENT_TYPE = Pattern.compile("[A-Z][A-Za-z0-9]{0,63}");
+  private static final Pattern WORD_START = Pattern.compile("(?<=[a-z0-9])(?=[A-Z])");
+
+  private AuditAction() {}
+
+  /** {@code SpecialPermissionGranted} becomes {@code SPECIAL_PERMISSION_GRANTED}. */
+  public static String of(String eventType) {
+    if (eventType == null || !EVENT_TYPE.matcher(eventType).matches()) {
+      throw new InvalidDataException("eventType", "must be a name such as SpecialPermissionGranted");
+    }
+    String action = WORD_START.matcher(eventType).replaceAll("_").toUpperCase(Locale.ROOT);
+    // the underscores can make it longer than the type, and a record refuses an action over 64
+    if (action.length() > MAX_LENGTH) {
+      throw new InvalidDataException("eventType", "is too long to make an action of at most " + MAX_LENGTH + " characters");
+    }
+    return action;
+  }
+
+  public static boolean isKnown(String action) {
+    return action != null && KNOWN.contains(action);
+  }
+}
