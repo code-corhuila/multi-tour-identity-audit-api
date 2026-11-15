@@ -39,7 +39,9 @@ class AuditActionTest {
         "SalidaMarkedPendienteDeRegularizacion", "SalidaCancelled", "ExtraordinaryCancellationRecorded", "OperationalCostRecorded",
         "PasswordRecoveryRequested", "PasswordReset", "PasswordResetFailed",
         // the deletion of the sensitive data of a reservation (spec 013)
-        "SensitiveDataDeleted");
+        "SensitiveDataDeleted",
+        // the change of a payment parameter (spec 013 amendment)
+        "PaymentParametersChanged");
 
     assertThat(events).allSatisfy(event -> assertThat(AuditAction.isKnown(AuditAction.of(event))).as(event).isTrue());
     assertThat(AuditAction.KNOWN).as("no action without an event").hasSize(events.size());
