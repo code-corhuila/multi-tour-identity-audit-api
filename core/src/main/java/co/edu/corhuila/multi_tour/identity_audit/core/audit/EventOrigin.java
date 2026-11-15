@@ -22,6 +22,7 @@ final class EventOrigin {
   private static final Origin RESERVATION = new Origin(RESERVATION_SERVICE, "reservations/");
   private static final Origin CUSTOMER = new Origin(RESERVATION_SERVICE, "customers/");
   private static final Origin DISCOUNT_RULE = new Origin(RESERVATION_SERVICE, "discount-rules/");
+  private static final Origin PAYMENT_CONDITION = new Origin(RESERVATION_SERVICE, "payment-conditions/");
   private static final Origin SUPPORT_ACCESS = new Origin(SECURITY_SERVICE, "support-accesses/");
   private static final Origin CASH_SESSION = new Origin(CASH_SERVICE, "cash-sessions/");
   private static final Origin CASH_MOVEMENT = new Origin(CASH_SERVICE, "cash-movements/");
@@ -46,6 +47,7 @@ final class EventOrigin {
       Map.entry("CustomerRegistered", CUSTOMER),
       Map.entry("SensitiveDataAccessed", CUSTOMER),
       Map.entry("SensitiveDataDeleted", RESERVATION),
+      Map.entry("PaymentParametersChanged", PAYMENT_CONDITION),
       Map.entry("DiscountRuleChanged", DISCOUNT_RULE),
       Map.entry("PlatformExceptionalAccessOpened", SUPPORT_ACCESS),
       Map.entry("PlatformExceptionalAccessClosed", SUPPORT_ACCESS),
