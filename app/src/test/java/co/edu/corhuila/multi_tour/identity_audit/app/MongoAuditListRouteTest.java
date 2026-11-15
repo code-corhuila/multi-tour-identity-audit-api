@@ -159,6 +159,28 @@ class MongoAuditListRouteTest extends ShellTest {
     assertThat(refused(as("TENANT_ADMINISTRATOR", TENANT), OF_TENANT + "?action=CASH_INCOME_NOPE").statusCode()).isEqualTo(400);
   }
 
+  // Spec 013 (AC-IDA-13.2): the deletion of the sensitive data of a reservation is accepted by the filter.
+  @Test
+  void C_filter_by_the_deletion_of_sensitive_data() {
+    seed(1, TENANT, "SENSITIVE_DATA_DELETED");
+    seed(2, TENANT, "SENSITIVE_DATA_ACCESSED");
+
+    assertThat(read(as("TENANT_ADMINISTRATOR", TENANT), OF_TENANT + "?action=SENSITIVE_DATA_DELETED").jsonPath().getList("data.auditRecordId"))
+        .containsExactly(id(1));
+    assertThat(refused(as("TENANT_ADMINISTRATOR", TENANT), OF_TENANT + "?action=SENSITIVE_DATA_NOPE").statusCode()).isEqualTo(400);
+  }
+
+  // Spec 013 amendment: the change of a payment parameter is accepted by the filter.
+  @Test
+  void C_filter_by_the_change_of_a_payment_parameter() {
+    seed(1, TENANT, "PAYMENT_PARAMETERS_CHANGED");
+    seed(2, TENANT, "SENSITIVE_DATA_DELETED");
+
+    assertThat(read(as("TENANT_ADMINISTRATOR", TENANT), OF_TENANT + "?action=PAYMENT_PARAMETERS_CHANGED").jsonPath().getList("data.auditRecordId"))
+        .containsExactly(id(1));
+    assertThat(refused(as("TENANT_ADMINISTRATOR", TENANT), OF_TENANT + "?action=PAYMENT_PARAMETERS_NOPE").statusCode()).isEqualTo(400);
+  }
+
   @Test
   void C_another_tenants_audit_is_404_whatever_the_role_and_the_access() {
     seed(1, OTHER, "ACCOUNT_BLOCKED");

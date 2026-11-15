@@ -33,7 +33,11 @@ public final class AuditAction {
       "CASH_INCOME_RECORDED", "OPERATIONAL_PAYMENT_RECORDED", "OPERATIONAL_EXPENSE_RECORDED", "REFUND_EXECUTED",
       "SALIDA_SCHEDULED", "SALIDA_RESCHEDULED", "SALIDA_VEHICLES_CHANGED", "SALIDA_EXECUTION_STARTED", "SALIDA_FINALIZED",
       "SALIDA_MARKED_PENDIENTE_DE_REGULARIZACION", "SALIDA_CANCELLED", "EXTRAORDINARY_CANCELLATION_RECORDED", "OPERATIONAL_COST_RECORDED",
-      "PASSWORD_RECOVERY_REQUESTED", "PASSWORD_RESET", "PASSWORD_RESET_FAILED");
+      "PASSWORD_RECOVERY_REQUESTED", "PASSWORD_RESET", "PASSWORD_RESET_FAILED",
+      // the deletion of the sensitive data of a reservation one year after its service (spec 013)
+      "SENSITIVE_DATA_DELETED",
+      // the change of a payment parameter of a tenant (spec 013 amendment)
+      "PAYMENT_PARAMETERS_CHANGED");
 
   private static final int MAX_LENGTH = 64;
   private static final Pattern EVENT_TYPE = Pattern.compile("[A-Z][A-Za-z0-9]{0,63}");
